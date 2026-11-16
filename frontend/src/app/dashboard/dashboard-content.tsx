@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
 import { BackendConnection } from "@/components/BackendConnection";
 import { SignOutButton } from "@/components/SignOutButton";
 import { getUserAndProfile } from "@/lib/supabase/server";
 
 export async function DashboardContent() {
+  // This page depends on the signed-in request. Wait until request time so
+  // Supabase can check session expiry without running during prerender.
+  await connection();
   const current = await getUserAndProfile();
   if (!current) {
     redirect("/login?next=/dashboard");

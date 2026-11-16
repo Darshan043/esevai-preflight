@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { connection } from "next/server";
 
 import { getUserAndProfile } from "@/lib/supabase/server";
 
 export async function HomeActions() {
+  // These buttons depend on the signed-in request. Wait until request time so
+  // Supabase can check session expiry without running during prerender.
+  await connection();
   const current = await getUserAndProfile();
 
   if (current) {

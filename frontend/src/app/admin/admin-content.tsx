@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
 import { AdminPing } from "@/components/AdminPing";
 import { getUserAndProfile } from "@/lib/supabase/server";
 
 export async function AdminContent() {
+  // This page depends on the signed-in request. Wait until request time so
+  // Supabase can check session expiry without running during prerender.
+  await connection();
   const current = await getUserAndProfile();
   if (!current) {
     redirect("/login?next=/admin");

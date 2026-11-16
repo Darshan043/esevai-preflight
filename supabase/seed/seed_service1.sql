@@ -116,18 +116,18 @@ CROSS JOIN (
       5
     )
 ) AS items (
-  code text,
-  name_en text,
-  name_ta text,
-  description text,
-  is_mandatory boolean,
-  accepted_formats text[],
-  max_size_mb int,
-  validity_days int,
-  keywords jsonb,
-  required_fields jsonb,
-  rules jsonb,
-  sort_order int
+  code,
+  name_en,
+  name_ta,
+  description,
+  is_mandatory,
+  accepted_formats,
+  max_size_mb,
+  validity_days,
+  keywords,
+  required_fields,
+  rules,
+  sort_order
 )
 WHERE services.slug = 'community-certificate'
 ON CONFLICT (service_id, code) DO UPDATE

@@ -21,7 +21,11 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 2 complete – scaffold running
+Step 3 – database SQL files ready (pending run in Supabase)
+
+## Database
+
+The schema, security rules, storage bucket, and Community Certificate seed are SQL files. Run them yourself in the Supabase SQL Editor. The order and expected result of each script are in [docs/step-03-run-order.md](docs/step-03-run-order.md). The table layout is explained in [docs/database-design.md](docs/database-design.md).
 
 ## How to run
 

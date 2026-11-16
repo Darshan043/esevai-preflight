@@ -16,3 +16,8 @@ Planned AI provider: Google Gemini API.
 - [x] Render account — USER-CONFIRMED, linked to GitHub
 
 Store every secret outside the repo (a password manager or a local file that Git ignores). Never commit `.env` files, keys, or passwords.
+
+## Build progress
+
+- [x] Step 1 – environment check, repository setup, and first Git push
+- [x] Step 2 – scaffold: FastAPI backend, Next.js frontend, and health check

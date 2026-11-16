@@ -21,8 +21,45 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-The six required dummy sample files are in `sample-docs/` and are Git-ignored. The original Word files and the earlier misnamed images were kept. Step 1 checks passed on 16 November 2026.
+Step 2 complete – scaffold running
 
 ## How to run
 
-_Placeholder. Application setup will be added in a later step._
+The sample documents from Step 1 stay in `sample-docs/` and are Git-ignored.
+
+### Backend (Windows PowerShell)
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+Run the tests from `backend` with the virtual environment activated:
+
+```powershell
+pytest
+```
+
+### Backend (macOS / Linux)
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+pytest
+```
+
+### Frontend (Windows, macOS, and Linux)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 while the backend is running on port 8000.

@@ -2,6 +2,9 @@
 .env
 .env.*
 !.env.example
+!**/.env.example
+frontend/.env.local
+backend/.venv/
 
 # Node / Next.js
 node_modules

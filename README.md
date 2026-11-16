@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 1 is not fully closed. Environment tools and repository files are in place. Dummy sample documents are not in `sample-docs/` yet.
+The six required dummy sample files are in `sample-docs/` and are Git-ignored. The original Word files and the earlier misnamed images were kept. Step 1 checks passed on 16 November 2026.
 
 ## How to run
 

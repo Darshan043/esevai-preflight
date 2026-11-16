@@ -4,78 +4,82 @@
 
 **Date:** 16 November 2026
 
-**Detected OS:** Microsoft Windows NT 10.0.26200.0 (Win32), PowerShell 5.1.26100.9818
+**Detected OS:** Microsoft Windows 11 Home Single Language, version 10.0.26200
 
 Planned AI provider: Google Gemini API.
 
-Commands below were run in this session. Tesseract and Poppler were missing from the inherited shell Path. They were found on the saved Machine and User Path, and the commands succeeded after that Path was loaded.
+Environment commands were run again after the sample correction. Sample files were opened and checked in this same pass. Government pages were not fetched again. The service text below is the text stored in `docs/service1-documents.md`.
 
-## Technical verification
+## Environment verification
 
-| Check | Required? | Result | Evidence | Reason if not PASS | Fix |
-| --- | --- | --- | --- | --- | --- |
-| git installed | Yes | PASS | `git version 2.53.0.windows.3` | | |
-| git identity configured | Yes | PASS | `user.name=Darshan043`; `user.email` is set | | |
-| Node >= 20 | Yes | PASS | `v24.16.0` | | |
-| npm | Yes | PASS | `11.13.0` | | |
-| Python >= 3.11 | Yes | PASS | `Python 3.12.10` via `python` | | |
-| pip | Yes | PASS | `pip 25.0.1 from C:\Users\lenovo\AppData\Local\Programs\Python\Python312\Lib\site-packages\pip (python 3.12)` | | |
-| Tesseract installed | Yes | PASS | `tesseract v5.4.0.20240606` from `C:\Program Files\Tesseract-OCR\tesseract.exe`. `winget list` shows `UB-Mannheim.TesseractOCR 5.4.0.20240606`. | | |
-| Tesseract has eng | Yes | PASS | `tesseract --list-langs` lists `eng`, `osd`, and `tam`. `eng.traineddata` is in the tessdata folder. | | |
-| Tesseract has tam | Yes | PASS | `tam` is in `tesseract --list-langs`. `tam.traineddata` is in the tessdata folder. | | |
-| Poppler | Yes | PASS | `pdftoppm version 25.07.0`. `winget list` shows `oschwartz10612.Poppler 25.07.0-0`. Binary directory: `C:\Users\lenovo\AppData\Local\Microsoft\WinGet\Packages\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\poppler-25.07.0\Library\bin` | | |
-| Docker (optional) | No | PASS | `Docker version 29.6.2, build dfc4efb` | | |
-
-## Repository verification
-
-| Check | Required? | Result | Evidence | Reason if not PASS | Fix |
-| --- | --- | --- | --- | --- | --- |
-| .gitignore present | Yes | PASS | `.gitignore` inspected | | |
-| README present | Yes | PASS | `README.md` inspected. Planned AI provider updated to Google Gemini API. | | |
-| docs folder present | Yes | PASS | `docs/`, `docs/SETUP_CHECKLIST.md`, `docs/service1-documents.md` | | |
-| step-reports folder present | Yes | PASS | `docs/step-reports/step-01-report.md` and `docs/step-reports/.gitkeep` | | |
-| sample-docs folder present | Yes | PASS | `sample-docs/` exists | | |
-| supabase folder present | Yes | PASS | `supabase/.gitkeep` | | |
-| .env ignored | Yes | PASS | Temporary empty `.env` created. `git check-ignore -v .env` printed `.gitignore:2:.env	.env` (exit 0). File deleted. `.env` is not present afterward. | | |
-| sample documents ignored | Yes | PASS | `git check-ignore -v sample-docs/test.pdf` printed `.gitignore:31:sample-docs/*	sample-docs/test.pdf` (exit 0). No sample file was created for this check. | | |
-| sample-docs/.gitkeep tracked | Yes | PASS | `git check-ignore -q sample-docs/.gitkeep` exited 1 (not ignored). `git ls-files` includes `sample-docs/.gitkeep`. | | |
-| five or six sample documents exist | Yes | FAIL | `Get-ChildItem -Force sample-docs` shows only `.gitkeep` (length 0). A full file listing of the project root shows no image or PDF sample files. | No dummy documents are in the repository | Add 5–6 dummy or redacted files to `sample-docs/` locally. The ignore rule will keep them out of Git. |
-| at least one blurry sample | Yes | FAIL | No sample files exist to inspect | Cannot check blur without files | Include one deliberately blurry dummy image among the local samples. |
-| no secrets or real personal documents committed | Yes | PASS | `git ls-files` lists only `.gitignore`, `README.md`, `docs/SETUP_CHECKLIST.md`, `docs/service1-documents.md`, `docs/step-reports/.gitkeep`, `docs/step-reports/step-01-report.md`, `sample-docs/.gitkeep`, and `supabase/.gitkeep`. No `.env`, key, or sample document is tracked. Secret values were not requested or read. | | |
-| git repo and origin | Yes | PASS | Branch `main`. Origin `https://github.com/Darshan043/esevai-preflight.git`. Earlier commits `9f01613` and `d19f803` are on origin. | | |
-
-## Manual items (user-confirmed)
-
-| Item | Status | Evidence |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Supabase project created, and project URL, anon key, service-role key, JWT secret, and DB password saved safely outside the repo | USER-CONFIRMED | Stated by the project owner. Values were not inspected and are not in Git. |
-| Google Gemini API key created | USER-CONFIRMED | Stated by the project owner. The key was not requested, displayed, or stored. Planned provider is Google Gemini API, replacing Anthropic Claude API. |
-| Vercel account created and linked to GitHub | USER-CONFIRMED | Stated by the project owner. Account linkage was not inspected from Vercel. |
-| Render account created and linked to GitHub | USER-CONFIRMED | Stated by the project owner. Account linkage was not inspected from Render. |
-| Official Community Certificate document list collected | USER-CONFIRMED | FAQ Question 7 and the live Service List were fetched on 16 November 2026. The DNC discrepancy is recorded below and in `docs/service1-documents.md`. It is not treated as resolved. |
-| 5–6 dummy/redacted sample documents, including one blurry document | NOT CONFIRMED | The project owner reported this as done. The `sample-docs/` directory contains only `.gitkeep`. No document file was found to inspect, so this is not marked USER-CONFIRMED. |
+| Windows 11 | PASS | `Microsoft Windows 11 Home Single Language 10.0.26200` |
+| Git | PASS | `git version 2.53.0.windows.3` |
+| Node.js >= 20 | PASS | `v24.16.0` |
+| npm | PASS | `11.13.0` |
+| Python >= 3.11 | PASS | `Python 3.12.10` |
+| pip | PASS | `pip 25.0.1` |
+| Docker | PASS | `Docker version 29.6.2, build dfc4efb` |
+| Tesseract | PASS | `tesseract v5.4.0.20240606` |
+| Tesseract eng | PASS | `tesseract --list-langs` lists `eng` |
+| Tesseract tam | PASS | `tesseract --list-langs` lists `tam` |
+| Poppler | PASS | `pdftoppm version 25.07.0` |
 
-## Official Community Certificate document requirements
+## Sample document verification
 
-Department: Revenue Administration. Service: Community Certificate. Service code: REV-101, from the FAQ instruction to open "REV-101 Community Certificate".
+Original files were left in place. New files use the required names.
 
-Sources checked on 16 November 2026:
+Word is installed, but its window title was `Unlicensed Product` and `ExportAsFixedFormat` did not finish. The four PDFs were therefore built from the text inside the DOCX files. They are genuine PDF 1.4 files, not renamed Word files. The en dash in the Word text is a hyphen in the PDF because the embedded Helvetica encoding used a hyphen. The words `SAMPLE - NOT VALID` are visible.
 
-- FAQ Question 7: https://www.tnesevai.tn.gov.in/citizen/Pages/FAQ.aspx#collapseSeven
-- Service List URL supplied for this project: https://www.tnesevai.tn.gov.in/citizen/ServiceList.aspx — this URL returned HTTP 404
-- Live Service List row that was actually read: https://www.tnesevai.tn.gov.in/citizen/Pages/ServiceList.aspx
+| Expected file | Result | Evidence |
+| --- | --- | --- |
+| `01-dummy-photo.jpg` | PASS | New JPEG, 33,354 bytes, 640×800. Header is JPEG. It is a drawn fictional portrait, not a photograph of a person. The banner reads `SAMPLE – NOT VALID`. Tesseract read that banner, `FICTIONAL PORTRAIT`, and `Not a real person or document`. The image is sharp. The older `01-dummy-photo.jpg.jpeg` was not changed. |
+| `02-dummy-address-proof.pdf` | PASS | 1,133 bytes. Header `%PDF-1.4`. `pdfinfo` reports 1 page, 612×792. `pdftotext` and a Poppler render show fictional address text for Arun Kumar, 12 Sample Street, Example Nagar, `SAMPLE-ADDR-0001`, and `SAMPLE - NOT VALID`. The DOCX remains. |
+| `03-dummy-community-certificate.pdf` | PASS | 1,433 bytes. Header `%PDF-1.4`. `pdfinfo` reports 1 page. Text includes Sample Community A, Example District, `MOCK-COMM-0001`, and `SAMPLE - NOT VALID`. The DOCX remains. |
+| `04-dummy-self-declaration.pdf` | PASS | 1,813 bytes. Header `%PDF-1.4`. `pdfinfo` reports 1 page. Text includes `MOCK-DECL-0001` and a statement that the declaration is fictional. The DOCX remains. |
+| `05-dummy-dnc-certificate.pdf` | PASS | 1,905 bytes. Header `%PDF-1.4`. `pdfinfo` reports 1 page. Text includes Fictional DNC Category A, `MOCK-DNC-0001`, and `SAMPLE - NOT VALID`. The DOCX remains. |
+| `06-blurry-photo.jpg` | PASS | New JPEG, 58,223 bytes, 1600×1100. Header is JPEG. Gaussian blur radius 3.2. The page is visibly soft, and Tesseract still read `SAMPLE – NOT VALID`, Arun Kumar, 12 Sample Street, Example Nagar, 05-11-2026, and `MOCK-TEST-0001`. The older `06-blurry-photo.jpg.png` was not changed. |
 
-The FAQ lists Photo, Address Proof, Community Certificate of Father or Mother or Siblings, and Self-Declaration of Applicant. The live Service List lists those items (with the wording "Any Address Proof") and additionally lists DNC Certificate. Accepted formats, Mandatory/Optional labels, expiry rules, and key fields are not specified in either source. Full rows are in `docs/service1-documents.md`.
+## Git and security
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Repository and branch | PASS | Branch `main`. Origin `https://github.com/Darshan043/esevai-preflight.git`. |
+| Sample files ignored | PASS | `git check-ignore -v` matches `.gitignore:31:sample-docs/*` for all six required files. `git status --short` does not list them. |
+| sample-docs/.gitkeep tracked | PASS | `git check-ignore -q sample-docs/.gitkeep` exits 1. `git ls-files` includes it. |
+| .env ignored | PASS | `.gitignore` ignores `.env`. No `.env` file is present. |
+| No sample or secret committed | PASS | The only tracked sample path is `sample-docs/.gitkeep`. Documentation contains no key, password, or token. |
+
+## Documentation verification
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Purpose and folder structure | PASS | `README.md` |
+| Google Gemini API, not Anthropic | PASS | `README.md` and `docs/SETUP_CHECKLIST.md` |
+| Secret handling without secret values | PASS | Checklist and `.gitignore` |
+| Supabase, Vercel, Render | PASS | Names only, marked user-confirmed |
+| REV-101 Community Certificate | PASS | `docs/service1-documents.md` |
+| FAQ four items | PASS | Photo, Address Proof, parent or sibling community certificate, self-declaration |
+| Service List DNC item | PASS | Listed separately and not treated as resolved |
+| Unknown fields | PASS | Formats, validity, and mandatory/optional status say `Not specified in official source – verify` |
+| README sample status | PASS | Updated to say the six required files are present and Git-ignored |
+
+## Manual items
+
+| Item | Status |
+| --- | --- |
+| Supabase project and keys saved outside the repo | USER-CONFIRMED |
+| Google Gemini API key created | USER-CONFIRMED. The key was not requested or displayed. |
+| Vercel linked to GitHub | USER-CONFIRMED |
+| Render linked to GitHub | USER-CONFIRMED |
+| Official document list collected, with the DNC discrepancy recorded | USER-CONFIRMED |
+| Six required dummy files, including one blurred image | TECHNICALLY VERIFIED from the files above |
 
 ## Overall verdict
 
-**FAIL**
-
-1. `sample-docs/` does not contain 5–6 dummy or redacted sample documents. Only `sample-docs/.gitkeep` is present.
-2. A blurry sample cannot be confirmed because no sample document exists.
-
-Tesseract (`eng` and `tam`), Poppler, Git, Node, Python, and the repository ignore rules passed. The official document list was checked, including the unresolved DNC difference. Gemini, Supabase, Vercel, and Render remain user-confirmed, without any secret values stored in the repo.
+**PASS – STEP 1 COMPLETE**
 
 ## Next action
 
-Not ready for Step 2. Add 5–6 dummy or redacted sample documents, including one blurry document, to `sample-docs/` on this machine. Do not commit those files. After they are present, recheck the folder before starting Step 2.
+Ready for Step 2 after this report is committed, if the project owner approves that commit. Do not commit anything in `sample-docs/` except `.gitkeep`.

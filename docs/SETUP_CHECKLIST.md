@@ -21,4 +21,5 @@ Store every secret outside the repo (a password manager or a local file that Git
 
 - [x] Step 1 – environment check, repository setup, and first Git push
 - [x] Step 2 – scaffold: FastAPI backend, Next.js frontend, and health check
-- [x] Step 3 – database SQL files created (schema, RLS, storage, and seed). Not run in Supabase yet.
+- [x] Step 3 – database SQL files created (schema, RLS, storage, and seed) and run in Supabase
+- [x] Step 4 – authentication: signup, login, protected pages, backend JWT check, admin role

@@ -2,15 +2,17 @@
 
 Accounts and secret **names** only. Do not put secret values in this repository.
 
-- [ ] GitHub repository (empty HTTPS remote for this project)
-- [ ] Supabase project
-  - [ ] Project URL
-  - [ ] Anon key
-  - [ ] Service-role key
-  - [ ] JWT secret
-  - [ ] Database password
-- [ ] Anthropic API key
-- [ ] Vercel account
-- [ ] Render account
+Planned AI provider: Google Gemini API.
+
+- [x] GitHub repository — verified: `https://github.com/Darshan043/esevai-preflight.git`
+- [x] Supabase project — USER-CONFIRMED. Secret values are stored outside this repo and were not inspected.
+  - [x] Project URL
+  - [x] Anon key
+  - [x] Service-role key
+  - [x] JWT secret
+  - [x] Database password
+- [x] Google Gemini API key — USER-CONFIRMED. The key is not stored in this repo.
+- [x] Vercel account — USER-CONFIRMED, linked to GitHub
+- [x] Render account — USER-CONFIRMED, linked to GitHub
 
 Store every secret outside the repo (a password manager or a local file that Git ignores). Never commit `.env` files, keys, or passwords.

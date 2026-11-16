@@ -7,7 +7,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 - Frontend: Next.js, TypeScript, Tailwind CSS (deployed on Vercel)
 - Backend: Python FastAPI (deployed on Render with Docker)
 - Data: Supabase (Postgres, Auth, Storage)
-- AI: Anthropic Claude API
+- AI: Google Gemini API
 - Document processing: Tesseract OCR (English and Tamil), OpenCV, pdf2image (Poppler)
 
 ## Planned folder structure
@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 1 complete – environment prepared
+Step 1 is not fully closed. Environment tools and repository files are in place. Dummy sample documents are not in `sample-docs/` yet.
 
 ## How to run
 

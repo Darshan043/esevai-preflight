@@ -1,0 +1,39 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules
+.next
+
+# Python
+__pycache__
+*.pyc
+.venv
+venv
+.pytest_cache
+
+# Build output
+dist
+build
+
+# OS junk
+.DS_Store
+
+# Logs and private keys
+*.log
+*.pem
+*.key
+credentials*
+
+# Sample documents stay local; keep the folder marker
+sample-docs/*
+!sample-docs/.gitkeep
+
+# Runtime scratch
+uploads/
+tmp/
+
+# Vercel
+.vercel

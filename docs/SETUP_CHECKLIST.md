@@ -24,3 +24,4 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 3 – database SQL files created (schema, RLS, storage, and seed) and run in Supabase
 - [x] Step 4 – authentication: signup, login, protected pages, backend JWT check, admin role
 - [x] Step 5 – frontend core UI: landing, services, checklist, and my applications
+- [x] Step 6 – file upload and storage: validated uploads, signed previews, replace and delete

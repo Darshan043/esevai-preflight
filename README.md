@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 5 complete – frontend core UI
+Step 6 complete – file upload and storage
 
 ## Authentication
 
@@ -46,7 +46,13 @@ Next.js `src/proxy.ts` refreshes the session and sends visitors who are not sign
 The FastAPI backend checks the access token on `GET /me` and `GET /admin/ping`. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page.
 
 Frontend env names: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`.
+Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `MAX_UPLOAD_MB`.
+
+## Uploads
+
+A citizen uploads one file per checklist slot. The backend accepts JPG, JPEG, PNG, and PDF only. The size limit is the smaller of that slot's `max_size_mb` and `MAX_UPLOAD_MB` (default 5 MB). The private Storage path is `{user_id}/{application_id}/{required_document_code}-{8-char-random}-{sanitized_filename}`.
+
+Only the owner can upload, preview, replace, or delete a file. An admin cannot open another person's files. Preview uses a new signed URL that lasts 300 seconds. The browser asks for a fresh link on every Preview click and does not save it.
 
 ## Database
 

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str = ""
     ANTHROPIC_API_KEY: str = ""
     CLAUDE_MODEL: str = ""
+    # Largest upload this API will accept, in megabytes. A checklist item can be smaller.
+    MAX_UPLOAD_MB: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

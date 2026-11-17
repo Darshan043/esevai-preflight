@@ -4,7 +4,7 @@ export type SlotStatus = "Pending" | "Uploaded" | "Processing" | "Passed" | "Nee
 
 // Turns one checklist row plus its saved file into a label the citizen can read.
 export function slotStatus(
-  upload: UploadedDocument | null,
+  upload: Pick<UploadedDocument, "id" | "status"> | null,
   results: ValidationResult[],
 ): SlotStatus {
   if (!upload) {

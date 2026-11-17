@@ -44,6 +44,24 @@ export type Application = {
   updated_at: string;
 };
 
+// Fields the browser may keep. The storage path stays on the server.
+export type PublicUpload = {
+  id: string;
+  required_document_id: string;
+  original_filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  status: "uploaded" | "processing" | "processed" | "failed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type PreviewLink = {
+  url: string;
+  mime_type: string | null;
+  expires_in: number;
+};
+
 export type UploadedDocument = {
   id: string;
   application_id: string;

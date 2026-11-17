@@ -65,6 +65,17 @@ GATE PASSED – Step 6 verified. No Step 6 code fixes were required.
 | Processed badge, not Passed | PENDING-USER | Needs the checklist | `slotStatus` returns Processed when there are no validation results | Confirm the teal Processed badge |
 | Phone-sized screen | PENDING-USER | Needs the checklist on a phone | The home page rendered in a narrow browser. The new panel is a single-column stack | Open a checklist on a phone |
 
+## Masking hardening
+
+Follow-up after the OCR audit. Line breaks between digit groups now count as separators for 12-digit and 16-digit identifiers. Two identifiers separated only by whitespace stay separate, so they are not merged into one longer number. A 12-digit identifier still keeps the last four digits. A 16-digit VID still keeps the last four digits. Phone numbers, dates, six-digit PIN codes, and Tamil numerals stay unchanged. Masking a second time changes nothing.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Focused masking tests | PASS | Plain, spaced, hyphenated, and newline-separated identifiers; adjacent identifiers; mixed labelled text; dates `17-11-2026` and `12/05/2003`; phone `9876543210`; PIN `600001`; Tamil numerals. A second mask pass returns the same text |
+| Pytest counts | PASS | 45 passed, 0 skipped, 1 warning (`StarletteDeprecationWarning` from FastAPI's test client) |
+| Frontend lint | PASS | `npm run lint` exited 0 |
+| Frontend build | PASS | `npm run build` exited 0 on Next.js 16.4.6 |
+
 ## Verdict
 
 AI work: PASS; live OCR tests: PENDING until the owner tests.

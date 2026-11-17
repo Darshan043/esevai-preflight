@@ -145,6 +145,58 @@ def test_masking_hides_ids_and_leaves_everyday_numbers() -> None:
     assert extract_masked_id_suffixes("XXXX XXXX 9012") == ["9012"]
 
 
+def test_masking_covers_line_breaks_adjacent_ids_and_mixed_text() -> None:
+    def once(source: str) -> str:
+        masked, _count = mask_sensitive(source)
+        again, again_count = mask_sensitive(masked)
+        assert again == masked
+        assert again_count == 0
+        return masked
+
+    assert once("123456789012") == "XXXX XXXX 9012"
+    assert once("1234 5678 9012") == "XXXX XXXX 9012"
+    assert once("1234-5678-9012") == "XXXX XXXX 9012"
+    assert once("1234\n5678\n9012") == "XXXX XXXX 9012"
+    assert once("1234\r\n5678\r\n9012") == "XXXX XXXX 9012"
+
+    assert once("1234567890123456") == "XXXX XXXX XXXX 3456"
+    assert once("1234 5678 9012 3456") == "XXXX XXXX XXXX 3456"
+    assert once("1234-5678-9012-3456") == "XXXX XXXX XXXX 3456"
+    assert once("1234\n5678\n9012\n3456") == "XXXX XXXX XXXX 3456"
+
+    assert once("9876543210") == "9876543210"
+    assert once("17-11-2026") == "17-11-2026"
+    assert once("12/05/2003") == "12/05/2003"
+    assert once("600001") == "600001"
+    assert once("எண் ௧௨௩௪\n௫௬௭௮\n௯௦௧௨") == "எண் XXXX XXXX 9012"
+
+    adjacent, adjacent_count = mask_sensitive("1234 5678 9012 1234 5678 9012 3456")
+    assert adjacent == "XXXX XXXX 9012 XXXX XXXX XXXX 3456"
+    assert adjacent_count == 2
+    split_lines, split_count = mask_sensitive("1234\n5678\n9012\n1234\n5678\n9012\n3456")
+    assert split_lines == "XXXX XXXX 9012\nXXXX XXXX XXXX 3456"
+    assert split_count == 2
+    assert once("1234 5678 9012 3456 2345 6789 0123 4567") == "XXXX XXXX XXXX 3456 XXXX XXXX XXXX 4567"
+    assert once("1234\n5678\n9012\n3456\n2345\n6789\n0123\n4567") == "XXXX XXXX XXXX 3456\nXXXX XXXX XXXX 4567"
+
+    mixed = "\n".join(
+        [
+            "Dummy 12-digit ID: 1234 5678 9012",
+            "Dummy 16-digit VID: 1234 5678 9012 3456",
+            "Dummy phone number: 9876543210",
+            "Document date: 17-11-2026",
+            "PIN code: 600001",
+        ]
+    )
+    result = once(mixed)
+    assert "XXXX XXXX 9012" in result
+    assert "XXXX XXXX XXXX 3456" in result
+    assert "9876543210" in result
+    assert "17-11-2026" in result
+    assert "600001" in result
+    assert "1234 5678" not in result
+
+
 def test_loader_reads_png_jpeg_and_pdf_and_rejects_garbage(monkeypatch: pytest.MonkeyPatch) -> None:
     png = load_document(_png_bytes(), "image/png")
     jpeg = load_document(_jpeg_bytes(), "image/jpeg")

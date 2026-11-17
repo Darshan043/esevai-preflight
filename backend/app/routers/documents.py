@@ -276,7 +276,8 @@ def delete_document(
         delete_rows("uploaded_documents", {"id": f"eq.{document_id}", "user_id": f"eq.{user.user_id}"})
     except SupabaseRequestError as exc:
         raise HTTPException(status_code=502, detail="The file could not be deleted.") from exc
-    return Response(status_code=204)
+    # A length is required so the browser finishes the empty response and the page can clear the slot.
+    return Response(status_code=204, headers={"content-length": "0"})
 
 
 @router.delete("/applications/{application_id}", status_code=204)
@@ -300,4 +301,4 @@ def delete_application(
         delete_rows("applications", {"id": f"eq.{application_id}", "user_id": f"eq.{user.user_id}"})
     except SupabaseRequestError as exc:
         raise HTTPException(status_code=502, detail="The application could not be deleted.") from exc
-    return Response(status_code=204)
+    return Response(status_code=204, headers={"content-length": "0"})

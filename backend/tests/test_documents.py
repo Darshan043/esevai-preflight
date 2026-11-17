@@ -318,6 +318,8 @@ def test_delete_document_removes_object_and_row(monkeypatch: object) -> None:
     _install(monkeypatch, store)
     response = client.delete(f"/documents/{UPLOAD_ID}", headers=_auth())
     assert response.status_code == 204
+    assert response.content == b""
+    assert response.headers.get("content-length") == "0"
     assert path in store.deleted_objects
     assert store.row is None
 

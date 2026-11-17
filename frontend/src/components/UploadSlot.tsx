@@ -75,7 +75,11 @@ export function UploadSlot({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const status = slotStatus(upload, results);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [removedId, setRemovedId] = useState<string | null>(null);
+  const shown = upload && upload.id !== removedId ? upload : null;
+  const status = slotStatus(shown, results);
 
   function goToLogin() {
     router.push(`/login?next=/applications/${applicationId}`);
@@ -170,7 +174,7 @@ export function UploadSlot({
   }
 
   async function preview() {
-    if (!upload) {
+    if (!shown) {
       return;
     }
     const token = await accessToken();
@@ -179,8 +183,8 @@ export function UploadSlot({
       return;
     }
     try {
-      const link = await fetchPreviewUrl(upload.id, token);
-      if (link.mime_type === "application/pdf" || upload.mime_type === "application/pdf") {
+      const link = await fetchPreviewUrl(shown.id, token);
+      if (link.mime_type === "application/pdf" || shown.mime_type === "application/pdf") {
         window.open(link.url, "_blank", "noopener,noreferrer");
         return;
       }
@@ -195,11 +199,7 @@ export function UploadSlot({
   }
 
   async function remove() {
-    if (!upload) {
-      return;
-    }
-    const confirmed = window.confirm("Delete this file? This cannot be undone.");
-    if (!confirmed) {
+    if (!shown) {
       return;
     }
     const token = await accessToken();
@@ -207,16 +207,24 @@ export function UploadSlot({
       goToLogin();
       return;
     }
+    setDeleting(true);
+    setMessage(null);
     try {
-      await deleteUploadedDocument(upload.id, token);
+      await deleteUploadedDocument(shown.id, token);
+      // Hide this file even if the page still has the old checklist props.
+      setRemovedId(shown.id);
       onChange(null);
+      setConfirmingDelete(false);
       setMessage(null);
+      router.refresh();
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         goToLogin();
         return;
       }
       setMessage(caught instanceof Error ? caught.message : NETWORK_ERROR);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -225,11 +233,11 @@ export function UploadSlot({
       <div className="mb-3">
         <StatusBadge status={status} />
       </div>
-      {upload ? (
+      {shown ? (
         <div className="rounded-lg border border-line bg-sky p-4 text-sm text-ink">
-          <p>File: {upload.original_filename ?? "Uploaded file"}</p>
-          <p className="mt-1">Size: {formatBytes(upload.size_bytes)}</p>
-          <p className="mt-1">Uploaded: {formatWhen(upload.created_at)}</p>
+          <p>File: {shown.original_filename ?? "Uploaded file"}</p>
+          <p className="mt-1">Size: {formatBytes(shown.size_bytes)}</p>
+          <p className="mt-1">Uploaded: {formatWhen(shown.created_at)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="btn-primary" onClick={() => void preview()} aria-label={`Preview ${document.name}`}>
               Preview
@@ -239,13 +247,37 @@ export function UploadSlot({
               className="btn-secondary"
               onClick={() => inputRef.current?.click()}
               aria-label={`Replace ${document.name}`}
+              disabled={deleting}
             >
               Replace
             </button>
-            <button type="button" className="btn-secondary border-red-200 text-red-800" onClick={() => void remove()}>
+            <button
+              type="button"
+              className="btn-secondary border-red-200 text-red-800"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={deleting}
+            >
               Delete
             </button>
           </div>
+          {confirmingDelete ? (
+            <div className="mt-3 rounded-lg border border-red-200 bg-white p-3" role="dialog" aria-label="Confirm delete">
+              <p>Delete this file? This cannot be undone.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary" onClick={() => void remove()} disabled={deleting}>
+                  {deleting ? "Deleting..." : "Delete file"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div
@@ -285,7 +317,7 @@ export function UploadSlot({
           const file = event.target.files?.[0];
           event.target.value = "";
           if (file) {
-            startUpload(file, Boolean(upload));
+            startUpload(file, Boolean(shown));
           }
         }}
       />
@@ -317,7 +349,7 @@ export function UploadSlot({
         <div className="mt-3" role="alert">
           <p className="text-sm text-red-800">{message}</p>
           {pendingFile ? (
-            <button type="button" className="btn-secondary mt-2" onClick={() => startUpload(pendingFile, Boolean(upload))}>
+            <button type="button" className="btn-secondary mt-2" onClick={() => startUpload(pendingFile, Boolean(shown))}>
               Retry
             </button>
           ) : null}
@@ -328,7 +360,7 @@ export function UploadSlot({
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-4">
             {/* The signed address is used once for this open preview and then forgotten. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewUrl} alt={upload?.original_filename ?? document.name} className="mx-auto max-h-[70vh] w-auto" />
+            <img src={previewUrl} alt={shown?.original_filename ?? document.name} className="mx-auto max-h-[70vh] w-auto" />
             <button
               type="button"
               className="btn-primary mt-4"

@@ -1,0 +1,63 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { writeLanguageCookie, type Language } from "@/lib/language";
+import { createClient } from "@/lib/supabase/client";
+
+export function LanguageToggle({
+  language,
+  userId,
+}: {
+  language: Language;
+  userId: string | null;
+}) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function choose(next: Language) {
+    if (next === language || pending) {
+      return;
+    }
+    setPending(true);
+    writeLanguageCookie(next);
+    if (userId) {
+      const supabase = createClient();
+      await supabase.from("profiles").update({ preferred_language: next }).eq("id", userId);
+    }
+    router.refresh();
+    setPending(false);
+  }
+
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border border-zinc-300" role="group" aria-label="Document language">
+      <button
+        type="button"
+        aria-pressed={language === "en"}
+        disabled={pending}
+        onClick={() => {
+          void choose("en");
+        }}
+        className={`inline-flex min-h-11 items-center px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
+          language === "en" ? "bg-zinc-900 text-white" : "bg-white text-zinc-800"
+        }`}
+      >
+        EN
+      </button>
+      <button
+        type="button"
+        aria-pressed={language === "ta"}
+        disabled={pending}
+        onClick={() => {
+          void choose("ta");
+        }}
+        className={`inline-flex min-h-11 items-center px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
+          language === "ta" ? "bg-zinc-900 text-white" : "bg-white text-zinc-800"
+        }`}
+      >
+        தமிழ்
+      </button>
+    </div>
+  );
+}

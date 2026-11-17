@@ -23,3 +23,4 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 2 – scaffold: FastAPI backend, Next.js frontend, and health check
 - [x] Step 3 – database SQL files created (schema, RLS, storage, and seed) and run in Supabase
 - [x] Step 4 – authentication: signup, login, protected pages, backend JWT check, admin role
+- [x] Step 5 – frontend core UI: landing, services, checklist, and my applications

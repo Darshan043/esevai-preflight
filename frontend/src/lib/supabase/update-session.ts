@@ -46,7 +46,12 @@ export async function updateSession(request: NextRequest) {
   const user = data.user;
   const path = request.nextUrl.pathname;
   const isProtected =
-    path === "/dashboard" || path.startsWith("/dashboard/") || path === "/admin" || path.startsWith("/admin/");
+    path === "/dashboard" ||
+    path.startsWith("/dashboard/") ||
+    path === "/admin" ||
+    path.startsWith("/admin/") ||
+    path === "/applications" ||
+    path.startsWith("/applications/");
   const isAuthPage = path === "/login" || path === "/signup";
 
   if (!user && isProtected) {
@@ -61,6 +66,29 @@ export async function updateSession(request: NextRequest) {
     redirectUrl.pathname = "/dashboard";
     redirectUrl.search = "";
     return copyCookies(supabaseResponse, NextResponse.redirect(redirectUrl));
+  }
+
+  // Cache Components starts a 200 response before a page can call notFound().
+  // Check an unknown service here so the status is 404 before rendering starts.
+  const serviceMatch = /^\/services\/([^/]+)$/.exec(path);
+  if (serviceMatch) {
+    const slug = decodeURIComponent(serviceMatch[1]);
+    const { data, error } = await supabase
+      .from("services")
+      .select("id")
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!error && !data) {
+      const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Service not found</title></head><body><main><h1>Service not found</h1><p>We could not find that service. It may be inactive, or the link may be wrong.</p><p><a href="/services">Back to services</a></p></main></body></html>`;
+      return copyCookies(
+        supabaseResponse,
+        new NextResponse(html, {
+          status: 404,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
+    }
   }
 
   return supabaseResponse;

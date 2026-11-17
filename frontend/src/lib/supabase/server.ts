@@ -3,6 +3,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 
 export type Profile = {
   full_name: string | null;
@@ -47,6 +48,8 @@ export async function getUserAndProfile(): Promise<{
   email: string | null;
   profile: Profile | null;
 } | null> {
+  // Session checks read the clock inside Supabase. Wait until request time first.
+  await connection();
   const supabase = await createClient();
   // getUser() checks the token with Supabase Auth. getSession() only reads the cookie.
   const { data } = await supabase.auth.getUser();

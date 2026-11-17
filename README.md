@@ -21,13 +21,27 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 4 complete – authentication
+Step 5 complete – frontend core UI
 
 ## Authentication
 
 A citizen signs up or logs in through Supabase Auth in the browser. The anon key stays in the frontend. The service-role key stays in `backend/.env` and is never sent to the browser.
 
-Next.js `src/proxy.ts` refreshes the session and sends visitors who are not signed in from `/dashboard` and `/admin` to `/login`. Signed-in visitors are sent from `/login` and `/signup` to `/dashboard`. The server checks the user with `getUser()`.
+Next.js `src/proxy.ts` refreshes the session and sends visitors who are not signed in from `/dashboard`, `/admin`, and `/applications` to `/login`. Signed-in visitors are sent from `/login` and `/signup` to `/dashboard`. The server checks the user with `getUser()`. The login `next` path must start with a single `/`.
+
+## Pages
+
+| Route | Access |
+| --- | --- |
+| `/` | Public |
+| `/services` | Public |
+| `/services/[slug]` | Public |
+| `/login` | Public |
+| `/signup` | Public |
+| `/dashboard` | Protected |
+| `/applications` | Protected |
+| `/applications/[id]` | Protected, owner only |
+| `/admin` | Protected, admin only |
 
 The FastAPI backend checks the access token on `GET /me` and `GET /admin/ping`. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page.
 

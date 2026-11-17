@@ -10,13 +10,15 @@ from datetime import date
 
 # Tamil digits become ASCII only while we look. The stored text is unchanged.
 _TAMIL_TO_ASCII = str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123456789")
-_DATE = re.compile(r"(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})(?!\d)")
+# Spaces are allowed around the separators because OCR often splits 17 - 11 - 2026.
+_DATE = re.compile(r"(?<!\d)(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2}|\d{4})(?!\d)")
 _TITLES = ("MR", "MRS", "MS", "DR", "THIRU", "SELVI", "TMT", "THIRUMATHI")
-# Longer labels first so "name of the applicant" wins over "name".
+# Longer labels first so "full name" wins over "name".
 _LABELS = (
     "name of the applicant",
     "name of applicant",
     "applicant name",
+    "full name",
     "holder",
     "name",
     "பெயர்",

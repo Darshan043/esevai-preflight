@@ -1,7 +1,11 @@
 # Step 8 verification report
 
-**Date:** 17 November 2026  
-**OS:** Windows 10.0.26200, PowerShell  
+**Date:** 17 November 2026
+
+**Finalized:** 18 November 2026
+
+**OS:** Windows 10.0.26200, PowerShell
+
 **Title:** Step 8 – document validation engine
 
 ## Gate
@@ -44,8 +48,9 @@ Required-document summary from the live database:
 | Verhoeff and id_checks | PASS | `test_id_checksum_reports_last4_only` builds the check digit in the test. One changed digit is invalid. The result holds only the last 4 digits. The pipeline stores `id_checks` before masking | | |
 | Engine modules | PASS | `models.py`, `defaults.py`, `text_extract.py`, `checks.py`, `cross_checks.py`, `engine.py` | | |
 | Endpoints | PASS | `POST /applications/{id}/validate` and `GET /applications/{id}/validation`. Replace, delete, and re-read also clear application-level results | | |
-| Pytest counts | PASS | 56 passed, 0 skipped, 1 warning (`StarletteDeprecationWarning`). Engine tests were not skipped | | |
+| Pytest counts | PASS | Final run on 18 November 2026: 58 passed, 0 skipped, 1 warning (`StarletteDeprecationWarning`). The two new tests cover labelled names, spaced dates, and form PDFs | | |
 | Offline demo | PASS | `scripts/validate_demo.py` printed DEMO PASSED. The good set had no failures. Wrong document, expired date, name mismatch, missing Photo, and blurry photo were all fail | | |
+| Frontend replacement tests | PASS | `node --experimental-strip-types --test tests/replacement.test.ts`: 5 passed, 0 failed | | |
 | Frontend lint | PASS | `npm run lint` exited 0 | | |
 | Frontend build | PASS | `npm run build` exited 0 on Next.js 16.4.6 | | |
 | 401 checks | PASS | Validate 401, validation GET 401, `/health` 200, `/` 200, `/applications` 307 to `/login` | | |
@@ -55,23 +60,48 @@ Required-document summary from the live database:
 | Service-role key stays off the frontend | PASS | `frontend/src` has no service-role key | | |
 | No secrets committed | PASS | Staged names had no `.env`, `.env.local`, `.venv`, `node_modules`, `sample-docs`, or binary images. The Step 8 diff had no `eyJ`, `sk-ant`, or `service_role` | | |
 | Feature commit and push | PASS | `9cbd4ef39e20db1519f3c4f7941c244c53a7fb03` pushed to `origin/main` (`3619304..9cbd4ef`) | | |
-| A good document set shows Passed or only minor warnings | PENDING-USER | Needs a signed-in checklist | The offline demo good set passed | Upload a clear matching set and press Re-run checks |
-| A blurry photo shows Needs fix | PENDING-USER | Needs a blurry upload | The demo flags blur as fail | Upload a blurry photo |
-| The wrong document shows "does not look like" | PENDING-USER | Needs the wrong file in a slot | The demo fails document type | Put an unrelated page in Address Proof |
-| An old-dated document shows expired | PENDING-USER | Needs a date limit on the row | Seed `max_age_days` is null, so this check is off until a number is saved. The demo fails a 2020 date when the limit is 90 days | Set `validity_days` or `max_age_days`, then upload an old document |
-| Two different names show the name-mismatch problem | PENDING-USER | Needs two processed files | The demo fails Anitha Kumar against Ravi Sharma | Use two documents with clearly different names |
-| An empty mandatory slot shows missing | PENDING-USER | Needs an empty slot | The demo fails a missing Photo | Leave Photo empty and press Re-run checks |
-| A dummy ID number shows the checksum warning | PENDING-USER | Needs `id_number_pattern` on that row | The seed rows do not set `id_number_pattern`, so the check is skipped until it is set. Unit tests cover valid, invalid, and missing | Set `rules.id_number_pattern` and upload a page with a dummy 12-digit number |
-| Results update after upload, replace, and delete | PENDING-USER | Needs the live checklist | The page calls validate after read, replace, and delete | Upload, replace, and delete one file |
-| Supabase rows have no names, text, or full numbers in details | PENDING-USER | Do not create a row from this session | Details are codes, numbers, booleans, and last-4 digits | Inspect `validation_results.details` |
-| Re-running does not create duplicates | PENDING-USER | Needs two live runs | The mocked endpoint test replaces old rows | Press Re-run checks twice |
-| A second user cannot read the first user's results | PENDING-USER | Needs two accounts | The automated test returns 404 | Sign in as the other account and open the same URL |
-| Badges show Passed, Check advised, and Needs fix | PENDING-USER | Needs the checklist | `slotStatus` maps fail, warning-only, and all-pass | Compare one of each |
-| Phone-sized screen | PENDING-USER | Needs the checklist on a phone | Controls stack in one column | Open a checklist on a phone |
+| Matching documents and cross-document name validation | PASS | Owner confirmed on 18 November 2026. A matching pair scores as a match. A different name on another processed document fails the shared name check. Details hold document codes and scores | | |
+| A blurry photo shows Needs fix | PASS | Owner confirmed blurry-photo detection | | |
+| Document validation and status badges | PASS | Owner confirmed the checklist checks and the slot badges | | |
+| An empty mandatory slot shows missing | PASS | Owner confirmed missing-document and checklist behaviour | | |
+| Results update after upload, replace, and delete | PASS | Owner confirmed replace, delete, and the validation refresh | | |
+| Re-running does not create duplicates | PASS | Owner confirmed repeated Re-run checks. The endpoint test also keeps the same saved row count on a second post | | |
+| A second user cannot read the first user's results | PASS | Owner confirmed with a second account. The automated test returns 404 | | |
+| Badges show Passed, Check advised, and Needs fix | PASS | Owner confirmed all three badges | | |
+| Phone-sized screen | PASS | Owner confirmed the checklist at mobile width | | |
+| Saved details have no names, OCR sentences, or full ID numbers | PASS | A read of the live `validation_results` rows found flags, field names, and scores only. No names and no 12-digit numbers were in the messages or details | | |
+| The wrong document shows "does not look like" | Not a live PASS | This sentence was not one of the nine confirmed live cases. The offline demo and unit tests do fail the wrong document type | The owner did not list this case among the nine | Run it only if that sentence still needs a live look |
+| An old-dated document shows expired | Not a live PASS | Seed `max_age_days` is null, so this check stays off. The demo fails a 2020 date when the limit is 90 days | Not part of the nine confirmed cases | Set `validity_days` or `max_age_days` before expecting this warning |
+| A dummy ID number shows the checksum warning | Not a live PASS | The seed rows do not set `id_number_pattern`, so the check is skipped. Unit tests cover valid, invalid, and missing | Not part of the nine confirmed cases | Set `rules.id_number_pattern` before expecting this warning |
+
+## OCR follow-up
+
+A one-page form was read as a single paragraph (`--psm 6`), so a two-column table kept the title and dropped the name and date. OCR now uses automatic page segmentation and keeps visual lines, including cells on the same row. `Full Name` is a name label, and dates may have spaces around `-`, `/`, and `.`. A bright white page with a contrast measurement is no longer called bad lighting. A dark page still warns. A blank page still fails.
+
+Known limits: two columns of prose at the same height can be joined into one line. A bright page that is not blank and already has a contrast measurement does not get the lighting warning. The form test draws with `C:\Windows\Fonts\arial.ttf`.
+
+## Replacement synchronization
+
+Replacing a file left the previous badge, quality numbers, and checks on screen until the new read finished. A late validation response could also overwrite a newer one.
+
+The slot now clears that document's checks and the shared checks when replacement starts, hides the old badge and extracted text, and shows only the step in progress: Uploading new document…, Uploading…, Upload complete., Reading document…, Checking document…. New results appear after the backend finishes. Only the latest operation may update the screen. Overlapping validation calls wait and run one at a time.
+
+| Replacement check | Result | Evidence |
+| --- | --- | --- |
+| Old badge, quality indicators, and OCR text disappear when replacement starts | PASS | Owner confirmed |
+| Only the latest upload, read, or validation response updates the screen | PASS | Owner confirmed. The unit test rejects an older epoch |
+| New document results appear after processing completes | PASS | Owner confirmed |
+| Re-read works | PASS | Owner confirmed |
+| Delete works | PASS | Owner confirmed |
+| Repeated Re-run checks does not create duplicate results | PASS | Owner confirmed |
+| Cancelling replacement restores the previous file and checks | PASS | Owner confirmed |
+| An invalid upload is rejected and the previous file remains | PASS | Owner confirmed |
 
 ## Verdict
 
-AI work: PASS; live validation tests: PENDING until the owner tests.
+Step 8 is complete. The nine live cases the owner confirmed passed. The date-age check and the ID checksum check stay off until those rule values are set. The "does not look like" sentence was covered by automated tests and was not one of the nine live cases.
+
+The nine live cases and the replacement checks above were confirmed by the owner on 18 November 2026. The steps below are the original checklist.
 
 ## Manual test steps for the owner
 

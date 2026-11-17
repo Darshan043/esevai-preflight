@@ -2,7 +2,7 @@
 
 // The checklist the citizen sees. Uploads update the progress without reloading the page.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Card } from "@/components/Card";
@@ -10,6 +10,7 @@ import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
 import { UploadSlot } from "@/components/UploadSlot";
 import { ApiError, NETWORK_ERROR, validateApplication } from "@/lib/api";
+import { restoreSuspended, resultsAfterLocalChange, validationOutcome } from "@/lib/replacement";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicUpload, ValidationResult } from "@/lib/types";
 
@@ -49,32 +50,90 @@ export function ChecklistBoard({
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState<string | null>(null);
+  const epoch = useRef(0);
+  const suspended = useRef<ValidationResult[] | null>(null);
+  const gate = useRef({ running: false, again: false });
+  const flight = useRef<Promise<void> | null>(null);
   const shared = checks.filter((result) => !result.uploaded_document_id);
   const uploadedCount = slots.filter((slot) => uploads[slot.id]).length;
 
-  async function refreshChecks() {
-    const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      router.push(`/login?next=/applications/${applicationId}`);
+  function suspend(uploadId: string | null) {
+    epoch.current += 1;
+    setChecks((current) => {
+      const kept = resultsAfterLocalChange(current, uploadId);
+      const keptIds = new Set(kept.map((result) => result.id));
+      suspended.current = current.filter((result) => !keptIds.has(result.id));
+      return kept;
+    });
+    setCheckNote(null);
+  }
+
+  function undoSuspend() {
+    const putBack = suspended.current;
+    suspended.current = null;
+    if (!putBack?.length) {
       return;
     }
-    setChecking(true);
-    setCheckError(null);
-    try {
-      const payload = await validateApplication(applicationId, token);
-      setChecks(payload.results);
-      setCheckNote("Checks updated.");
-    } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 401) {
-        router.push(`/login?next=/applications/${applicationId}`);
-        return;
-      }
-      setCheckError(caught instanceof Error ? caught.message : NETWORK_ERROR);
-    } finally {
-      setChecking(false);
+    setChecks((current) => restoreSuspended(current, putBack));
+  }
+
+  function refreshChecks(): Promise<void> {
+    gate.current.again = true;
+    if (gate.current.running) {
+      return flight.current ?? Promise.resolve();
     }
+    gate.current.running = true;
+    const promise = (async () => {
+      try {
+        while (gate.current.again) {
+          gate.current.again = false;
+          const started = epoch.current;
+          setChecking(true);
+          setCheckError(null);
+          try {
+            const supabase = createClient();
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token;
+            if (!token) {
+              gate.current.again = false;
+              router.push(`/login?next=/applications/${applicationId}`);
+              return;
+            }
+            const payload = await validateApplication(applicationId, token);
+            const outcome = validationOutcome(started, epoch.current, gate.current.again);
+            gate.current.again = outcome.repeat;
+            if (outcome.apply) {
+              setChecks(payload.results);
+              suspended.current = null;
+              setCheckNote("Checks updated.");
+            }
+          } catch (caught) {
+            const outcome = validationOutcome(started, epoch.current, gate.current.again);
+            gate.current.again = outcome.repeat;
+            if (!outcome.apply) {
+              continue;
+            }
+            if (caught instanceof ApiError && caught.status === 401) {
+              gate.current.again = false;
+              router.push(`/login?next=/applications/${applicationId}`);
+              return;
+            }
+            setCheckError(caught instanceof Error ? caught.message : NETWORK_ERROR);
+          } finally {
+            if (started === epoch.current && !gate.current.again) {
+              setChecking(false);
+            }
+          }
+        }
+      } finally {
+        gate.current.running = false;
+        if (gate.current.again) {
+          void refreshChecks();
+        }
+      }
+    })();
+    flight.current = promise;
+    return promise;
   }
   const progress = slots.length === 0 ? 0 : Math.round((uploadedCount / slots.length) * 100);
 
@@ -133,7 +192,9 @@ export function ChecklistBoard({
                 document={slot}
                 upload={uploads[slot.id] ?? null}
                 results={checks}
-                onActivity={() => void refreshChecks()}
+                onActivity={() => refreshChecks()}
+                onSuspend={() => suspend(uploads[slot.id]?.id ?? null)}
+                onUndoSuspend={undoSuspend}
                 onChange={(next) => {
                   setUploads((current) => ({ ...current, [slot.id]: next }));
                 }}

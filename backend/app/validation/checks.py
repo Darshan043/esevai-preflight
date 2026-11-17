@@ -46,7 +46,14 @@ def image_quality(document: DocumentInput) -> Result | None:
     brightness = _number(metrics, "brightness_mean")
     low = _rule_number(document.config, "min_brightness", DEFAULT_MIN_BRIGHTNESS)
     high = _rule_number(document.config, "max_brightness", DEFAULT_MAX_BRIGHTNESS)
-    if brightness is not None and (brightness < low or brightness > high):
+    contrast = _number(metrics, "contrast_std")
+    # White paper makes the average very high even when the letters are black.
+    # Call it bad lighting only for a blank bright page, or for older metrics
+    # that did not record contrast and so cannot be told apart from glare.
+    glare = brightness is not None and brightness > high and (
+        contrast is None or metrics.get("is_probably_blank") is True
+    )
+    if (brightness is not None and brightness < low) or glare:
         problems.append(("warning", "The lighting makes this hard to read.", "Take the photo again in even light.", "brightness_off"))
 
     skew = _number(metrics, "skew_angle_degrees")

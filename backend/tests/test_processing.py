@@ -2,7 +2,7 @@
 
 import io
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import cv2
 import numpy as np
@@ -262,6 +262,71 @@ def test_prepare_for_ocr_returns_grayscale() -> None:
     assert prepared.ndim == 2
     binary = threshold_for_ocr(prepared)
     assert binary.shape == prepared.shape
+
+
+def _form_pdf(rows: list[tuple[str, str]], *, table: bool) -> bytes:
+    """A one-page A4 form. Tests use this instead of a stored sample file."""
+    font = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 28)
+    image = Image.new("RGB", (1654, 2339), "white")
+    draw = ImageDraw.Draw(image)
+    top = 180
+    for label, value in rows:
+        if table:
+            draw.rectangle((100, top, 1550, top + 90), outline="black", width=2)
+            draw.line((700, top, 700, top + 90), fill="black", width=2)
+            draw.text((120, top + 25), f"{label}:", font=font, fill="black")
+            draw.text((740, top + 25), value, font=font, fill="black")
+        else:
+            draw.text((120, top), f"{label}: {value}", font=font, fill="black")
+        top += 110
+    buffer = io.BytesIO()
+    image.save(buffer, format="PDF", resolution=200)
+    return buffer.getvalue()
+
+
+@pytest.mark.skipif(not _tesseract_ready(), reason="tesseract is not installed")
+def test_form_pdf_keeps_name_date_and_address(caplog: pytest.LogCaptureFixture) -> None:
+    forms = [
+        (
+            False,
+            [
+                ("Full Name", "Ravi Kumar"),
+                ("Address", "8, Lake Road, Example Nagar"),
+                ("Document Date", "02-03-2024"),
+                ("Reference", "2345 6789 0123"),
+            ],
+            "RAVI KUMAR",
+            date(2024, 3, 2),
+            "Lake Road",
+        ),
+        (
+            True,
+            [
+                ("Full Name", "Mohan Das"),
+                ("Address", "4, Hill Road, Example Nagar"),
+                ("Document Date", "29.08.2025"),
+                ("Reference", "3456 7890 1234"),
+            ],
+            "MOHAN DAS",
+            date(2025, 8, 29),
+            "Hill Road",
+        ),
+    ]
+    from app.validation.text_extract import extract_dates, extract_name_candidate
+
+    for table, rows, name, issued, street in forms:
+        pdf = _form_pdf(rows, table=table)
+        with caplog.at_level(logging.INFO):
+            result = process_document(pdf, "application/pdf")
+        masked = str(result["ocr_text_masked"])
+        assert extract_name_candidate(masked) == name
+        assert issued in extract_dates(masked)
+        assert street in masked
+        assert "2345 6789" not in masked
+        assert "3456 7890" not in masked
+        assert name.title() not in caplog.text
+        assert "2345 6789" not in caplog.text
+        assert "3456 7890" not in caplog.text
 
 
 @pytest.mark.skipif(not _tesseract_ready(), reason="tesseract is not installed")

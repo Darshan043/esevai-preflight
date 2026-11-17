@@ -85,8 +85,12 @@ def test_image_quality_sharp_blur_size_light_blank_and_photo() -> None:
 
     dark = image_quality(_document("page", metrics=_metrics(brightness_mean=10)))
     bright = image_quality(_document("page", metrics=_metrics(brightness_mean=250)))
+    paper = image_quality(_document("page", metrics=_metrics(brightness_mean=250, contrast_std=5, is_probably_blank=False)))
+    blank_glare = image_quality(_document("page", metrics=_metrics(brightness_mean=250, contrast_std=5, is_probably_blank=True)))
     assert dark is not None and dark.status == "warning"
     assert bright is not None and bright.status == "warning"
+    assert paper is not None and paper.status == "pass"
+    assert blank_glare is not None and blank_glare.status == "fail"
 
     blank = image_quality(_document("page", metrics=_metrics(is_probably_blank=True)))
     assert blank is not None and blank.status == "fail"
@@ -128,6 +132,19 @@ def test_document_type_keywords_fuzzy_and_readability() -> None:
     )
     assert wrong is not None and wrong.status == "fail"
     assert "does not look like" in wrong.message
+
+
+def test_labelled_name_and_date_lines() -> None:
+    from app.validation.text_extract import extract_dates, extract_name_candidate
+
+    first = "Full Name: Meena Iyer\nDocument Date: 02-03-2024\nAddress: 8, Lake Road"
+    second = "Full Name:\nKarthik Raman\nDocument Date:\n29.08.2025"
+    spaced = "Issued 17 - 11 - 2026"
+    assert extract_name_candidate(first) == "MEENA IYER"
+    assert extract_dates(first) == [date(2024, 3, 2)]
+    assert extract_name_candidate(second) == "KARTHIK RAMAN"
+    assert extract_dates(second) == [date(2025, 8, 29)]
+    assert extract_dates(spaced) == [date(2026, 11, 17)]
 
 
 def test_required_fields_present_and_missing() -> None:

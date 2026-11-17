@@ -17,6 +17,7 @@ import {
   processDocument,
   uploadUrl,
 } from "@/lib/api";
+import { metricsAfterReadFailure, replacementLabel, showStoredResults, type ReplacementPhase } from "@/lib/replacement";
 import { slotStatus } from "@/lib/slot-status";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicUpload, ValidationResult } from "@/lib/types";
@@ -49,13 +50,6 @@ function formatWhen(value: string | null): string {
     return "Time not recorded";
   }
   return value.replace("T", " ").slice(0, 16);
-}
-
-function asMetrics(value: unknown, fallback: Record<string, unknown> | undefined): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return fallback ?? {};
 }
 
 function metricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
@@ -121,13 +115,17 @@ export function UploadSlot({
   results,
   onChange,
   onActivity,
+  onSuspend,
+  onUndoSuspend,
 }: {
   applicationId: string;
   document: SlotDocument;
   upload: PublicUpload | null;
   results: ValidationResult[];
   onChange: (next: PublicUpload | null) => void;
-  onActivity?: () => void;
+  onActivity?: () => void | Promise<void>;
+  onSuspend?: () => void;
+  onUndoSuspend?: () => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -142,12 +140,16 @@ export function UploadSlot({
   const [removedId, setRemovedId] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [processError, setProcessError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<ReplacementPhase>("idle");
   const abortRef = useRef<AbortController | null>(null);
   const ignoreRef = useRef(false);
   const beforeRead = useRef<PublicUpload | null>(null);
+  const operationRef = useRef(0);
   const shown = upload && upload.id !== removedId ? upload : null;
-  const status = reading ? "Processing" : slotStatus(shown, results);
-  const waiting = reading || shown?.status === "processing";
+  const phaseLabel = replacementLabel(phase, progress);
+  const showCurrent = showStoredResults(phase);
+  const status = !showCurrent || reading ? "Processing" : slotStatus(shown, results);
+  const waiting = !showCurrent || reading || shown?.status === "processing";
   const savedError =
     shown?.status === "failed" && typeof shown.quality_metrics?.error === "string" ? shown.quality_metrics.error : null;
   const visibleError = processError || savedError;
@@ -172,6 +174,25 @@ export function UploadSlot({
     return null;
   }
 
+  function nextOperation(): number {
+    operationRef.current += 1;
+    return operationRef.current;
+  }
+
+  function isCurrent(operation: number): boolean {
+    return operationRef.current === operation;
+  }
+
+  function failUpload(operation: number, text: string) {
+    if (!isCurrent(operation)) {
+      return;
+    }
+    setProgress(null);
+    setPhase("idle");
+    setMessage(text);
+    onUndoSuspend?.();
+  }
+
   function startUpload(file: File, replacing: boolean) {
     if (replacing) {
       const confirmed = window.confirm("Replace the current file? The old file will be removed.");
@@ -185,15 +206,26 @@ export function UploadSlot({
       setPendingFile(file);
       return;
     }
+    const operation = nextOperation();
+    ignoreRef.current = true;
+    abortRef.current?.abort();
+    requestRef.current?.abort();
+    onSuspend?.();
     setMessage(null);
+    setProcessError(null);
     setPendingFile(file);
     setProgress(0);
-    void send(file);
+    setPhase("uploading");
+    void send(file, operation);
   }
 
-  async function send(file: File) {
+  async function send(file: File, operation: number) {
     const token = await accessToken();
+    if (!isCurrent(operation)) {
+      return;
+    }
     if (!token) {
+      failUpload(operation, "Please sign in again.");
       goToLogin();
       return;
     }
@@ -204,50 +236,78 @@ export function UploadSlot({
     xhr.open("POST", uploadUrl(applicationId, document.id));
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        setProgress(Math.round((event.loaded / event.total) * 100));
+      if (!isCurrent(operation) || !event.lengthComputable) {
+        return;
       }
+      setProgress(Math.round((event.loaded / event.total) * 100));
     };
     xhr.onerror = () => {
-      setProgress(null);
-      setMessage(NETWORK_ERROR);
+      requestRef.current = null;
+      failUpload(operation, NETWORK_ERROR);
     };
     xhr.onabort = () => {
-      setProgress(null);
-      setMessage("Upload cancelled.");
+      if (requestRef.current === xhr) {
+        requestRef.current = null;
+      }
+      failUpload(operation, "Upload cancelled.");
     };
     xhr.onload = () => {
+      if (requestRef.current === xhr) {
+        requestRef.current = null;
+      }
+      if (!isCurrent(operation)) {
+        return;
+      }
       setProgress(null);
-      requestRef.current = null;
       if (xhr.status === 401) {
+        failUpload(operation, "Please sign in again.");
         goToLogin();
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300) {
         try {
           const parsed = JSON.parse(xhr.responseText) as { detail?: string };
-          setMessage(parsed.detail || `The backend returned status ${xhr.status}.`);
+          failUpload(operation, parsed.detail || `The backend returned status ${xhr.status}.`);
         } catch {
-          setMessage(`The backend returned status ${xhr.status}.`);
+          failUpload(operation, `The backend returned status ${xhr.status}.`);
         }
         return;
       }
-      const parsed: unknown = JSON.parse(xhr.responseText);
-      if (!isPublicUpload(parsed)) {
-        setMessage("The server response could not be read.");
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(xhr.responseText);
+      } catch {
+        failUpload(operation, "The server response could not be read.");
         return;
       }
+      if (!isPublicUpload(parsed)) {
+        failUpload(operation, "The server response could not be read.");
+        return;
+      }
+      setPhase("uploaded");
       onChange(parsed);
       setPendingFile(null);
       setMessage(null);
-      void readDocument(parsed);
+      void readDocument(parsed, operation);
     };
     xhr.send(body);
   }
 
-  async function readDocument(current: PublicUpload) {
+  function startRead(current: PublicUpload) {
+    const operation = nextOperation();
+    ignoreRef.current = true;
+    abortRef.current?.abort();
+    onSuspend?.();
+    void readDocument(current, operation);
+  }
+
+  async function readDocument(current: PublicUpload, operation: number) {
     const token = await accessToken();
+    if (!isCurrent(operation)) {
+      return;
+    }
     if (!token) {
+      setPhase("idle");
       goToLogin();
       return;
     }
@@ -259,10 +319,11 @@ export function UploadSlot({
     setReading(true);
     setProcessError(null);
     setMessage(null);
-    onChange({ ...current, status: "processing" });
+    setPhase("reading");
+    onChange({ ...current, status: "processing", quality_metrics: {}, ocr_text_masked: null });
     try {
       const result = await processDocument(current.id, token, controller.signal);
-      if (ignoreRef.current) {
+      if (!isCurrent(operation) || ignoreRef.current) {
         return;
       }
       onChange({
@@ -273,28 +334,45 @@ export function UploadSlot({
         ocr_text_masked: result.ocr_text_masked,
       });
       setProcessError(null);
-      onActivity?.();
+      setPhase("checking");
+      await onActivity?.();
+      if (!isCurrent(operation)) {
+        return;
+      }
+      setPhase("idle");
     } catch (caught) {
-      if (ignoreRef.current || (caught instanceof DOMException && caught.name === "AbortError")) {
+      if (!isCurrent(operation) || ignoreRef.current || (caught instanceof DOMException && caught.name === "AbortError")) {
         return;
       }
       if (caught instanceof ApiError && caught.status === 401) {
+        setPhase("idle");
         goToLogin();
         return;
       }
       const body = caught instanceof ApiError ? caught.body : null;
       const failedStatus = body && typeof body.status === "string" ? body.status : "";
+      const failedReading = metricsAfterReadFailure(body);
       if (failedStatus === "uploaded" || failedStatus === "processing" || failedStatus === "processed" || failedStatus === "failed") {
         onChange({
           ...current,
           status: failedStatus,
           updated_at: typeof body?.updated_at === "string" ? body.updated_at : current.updated_at,
-          quality_metrics: asMetrics(body?.quality_metrics, current.quality_metrics),
-          ocr_text_masked: typeof body?.ocr_text_masked === "string" ? body.ocr_text_masked : null,
+          quality_metrics: failedReading.quality_metrics,
+          ocr_text_masked: failedReading.ocr_text_masked,
         });
+      } else {
+        onChange({ ...current, status: "failed", quality_metrics: {}, ocr_text_masked: null });
       }
       setProcessError(caught instanceof Error ? caught.message : NETWORK_ERROR);
-      onActivity?.();
+      setPhase("checking");
+      try {
+        await onActivity?.();
+      } catch {
+        // The checklist shows its own error. This slot must not stay on the old results.
+      }
+      if (isCurrent(operation)) {
+        setPhase("idle");
+      }
     } finally {
       if (abortRef.current === controller) {
         setReading(false);
@@ -306,6 +384,7 @@ export function UploadSlot({
     ignoreRef.current = true;
     abortRef.current?.abort();
     setReading(false);
+    setPhase("idle");
     if (beforeRead.current) {
       onChange(beforeRead.current);
     }
@@ -347,6 +426,7 @@ export function UploadSlot({
     }
     setDeleting(true);
     setMessage(null);
+    onSuspend?.();
     try {
       await deleteUploadedDocument(shown.id, token);
       // Hide this file even if the page still has the old checklist props.
@@ -354,9 +434,10 @@ export function UploadSlot({
       onChange(null);
       setConfirmingDelete(false);
       setMessage(null);
-      onActivity?.();
+      await onActivity?.();
       router.refresh();
     } catch (caught) {
+      onUndoSuspend?.();
       if (caught instanceof ApiError && caught.status === 401) {
         goToLogin();
         return;
@@ -370,9 +451,17 @@ export function UploadSlot({
   return (
     <div className="mt-4">
       <div className="mb-3" aria-live="polite">
-        <StatusBadge status={status} />
+        {showCurrent ? <StatusBadge status={status} /> : null}
+        {phaseLabel ? (
+          <p className="flex items-center gap-2 text-sm text-ink" role="status">
+            <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-royal" />
+            {phaseLabel}
+          </p>
+        ) : null}
       </div>
-      {shown ? (
+      {phase === "uploading" ? (
+        <p className="mb-3 text-sm text-ink">New file: {pendingFile?.name ?? "Selected file"}</p>
+      ) : shown ? (
         <div className="rounded-lg border border-line bg-sky p-4 text-sm text-ink">
           <p>File: {shown.original_filename ?? "Uploaded file"}</p>
           <p className="mt-1">Size: {formatBytes(shown.size_bytes)}</p>
@@ -401,7 +490,7 @@ export function UploadSlot({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => void readDocument(shown)}
+              onClick={() => startRead(shown)}
               disabled={waiting}
             >
               Re-read document
@@ -468,42 +557,44 @@ export function UploadSlot({
           }
         }}
       />
-      {progress != null ? (
+      {phase === "uploading" ? (
         <div className="mt-3">
-          <p className="text-sm text-ink" id={`${document.id}-progress`}>
-            Uploading {progress}%
-          </p>
-          <div
-            className="mt-2 h-3 overflow-hidden rounded-full bg-sky"
-            role="progressbar"
-            aria-labelledby={`${document.id}-progress`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress}
-          >
-            <div className="h-full bg-royal" style={{ width: `${progress}%` }} />
-          </div>
+          {progress != null && progress > 0 ? (
+            <>
+              <p className="sr-only" id={`${document.id}-progress`}>
+                Uploading {progress}%
+              </p>
+              <div
+                className="h-3 overflow-hidden rounded-full bg-sky"
+                role="progressbar"
+                aria-labelledby={`${document.id}-progress`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress}
+              >
+                <div className="h-full bg-royal" style={{ width: `${progress}%` }} />
+              </div>
+            </>
+          ) : null}
           <button
             type="button"
             className="btn-secondary mt-3"
-            onClick={() => requestRef.current?.abort()}
+            onClick={() => {
+              if (requestRef.current) {
+                requestRef.current.abort();
+                return;
+              }
+              failUpload(operationRef.current, "Upload cancelled.");
+            }}
           >
             Cancel
           </button>
         </div>
       ) : null}
-      {waiting ? (
-        <div className="mt-3" role="status" aria-live="polite">
-          <p className="flex items-center gap-2 text-sm text-ink">
-            <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-royal" />
-            Reading your document… This can take up to about 30 seconds.
-          </p>
-          {reading ? (
-            <button type="button" className="btn-secondary mt-3" onClick={ignoreReading}>
-              Cancel
-            </button>
-          ) : null}
-        </div>
+      {phase === "reading" && reading ? (
+        <button type="button" className="btn-secondary mt-3" onClick={ignoreReading}>
+          Cancel
+        </button>
       ) : null}
       {message ? (
         <div className="mt-3" role="alert">
@@ -519,16 +610,16 @@ export function UploadSlot({
         <div className="mt-3" role="alert">
           <p className="text-sm text-red-800">{visibleError}</p>
           {shown ? (
-            <button type="button" className="btn-secondary mt-2" onClick={() => void readDocument(shown)} disabled={waiting}>
+            <button type="button" className="btn-secondary mt-2" onClick={() => startRead(shown)} disabled={waiting}>
               Try again
             </button>
           ) : null}
         </div>
       ) : null}
-      {shown && shown.status === "processed" && !waiting ? (
+      {shown && shown.status === "processed" && (showCurrent || phase === "checking") ? (
         <QualityPanel metrics={shown.quality_metrics ?? {}} text={shown.ocr_text_masked ?? null} />
       ) : null}
-      {shown ? <CheckList results={results.filter((result) => result.uploaded_document_id === shown.id)} /> : null}
+      {showCurrent && shown ? <CheckList results={results.filter((result) => result.uploaded_document_id === shown.id)} /> : null}
       {previewUrl ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/70 p-4" role="dialog" aria-modal="true" aria-label="Document preview">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-4">

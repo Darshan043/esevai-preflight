@@ -136,6 +136,22 @@ def insert_row(table: str, row: dict[str, Any]) -> dict[str, Any]:
     raise SupabaseRequestError(f"Supabase did not return the new {table} row.")
 
 
+def insert_rows(table: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Insert many rows and return them. An empty list inserts nothing."""
+    if not rows:
+        return []
+    base_url, service_key = _settings()
+    headers = _headers(service_key)
+    headers["Content-Type"] = "application/json"
+    headers["Prefer"] = "return=representation"
+    response = _send("POST", f"{base_url}/rest/v1/{table}", headers, json_body=rows)
+    _raise_for_status(response, service_key)
+    payload = response.json()
+    if not isinstance(payload, list):
+        raise SupabaseRequestError(f"Supabase did not return the new {table} rows.")
+    return [item for item in payload if isinstance(item, dict)]
+
+
 def update_rows(table: str, match: dict[str, str], values: dict[str, Any]) -> list[dict[str, Any]]:
     """Update rows selected by match, which uses PostgREST filters such as eq.<id>."""
     base_url, service_key = _settings()

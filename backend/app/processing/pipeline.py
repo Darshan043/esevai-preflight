@@ -8,7 +8,7 @@ import time
 
 from app.config import settings
 from app.processing.loader import DocumentUnreadableError, load_document
-from app.processing.masking import mask_sensitive
+from app.processing.masking import check_id_numbers, mask_sensitive
 from app.processing.ocr import run_ocr
 from app.processing.preprocess import prepare_for_ocr
 from app.processing.quality import measure_quality
@@ -46,6 +46,8 @@ def process_document(content_bytes: bytes, mime_type: str) -> dict[str, object]:
         langs_used = str(page.get("langs_used") or langs_used)
 
     combined = PAGE_BREAK.join(page_texts).strip()
+    # Check digits before masking. Only the last 4 digits are kept.
+    id_checks = check_id_numbers(combined)
     masked, masked_count = mask_sensitive(combined)
     if len(masked) > TEXT_LIMIT:
         masked = masked[:TEXT_LIMIT]
@@ -75,6 +77,7 @@ def process_document(content_bytes: bytes, mime_type: str) -> dict[str, object]:
         "ocr_word_count": word_count,
         "ocr_langs": langs_used,
         "masked_id_count": masked_count,
+        "id_checks": id_checks,
         "processing_ms": elapsed_ms,
         "warnings": warnings,
     }

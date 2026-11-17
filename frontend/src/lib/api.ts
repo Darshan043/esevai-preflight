@@ -1,6 +1,6 @@
 // Talks to the FastAPI backend. The URL comes from the frontend env file.
 
-import type { PreviewLink, PublicUpload } from "@/lib/types";
+import type { PreviewLink, PublicUpload, ValidationResult } from "@/lib/types";
 
 export type DocumentResult = {
   id: string;
@@ -8,6 +8,18 @@ export type DocumentResult = {
   quality_metrics: Record<string, unknown>;
   ocr_text_masked: string | null;
   updated_at: string;
+};
+
+export type ValidationSummary = {
+  pass: number;
+  warning: number;
+  fail: number;
+};
+
+export type ValidationPayload = {
+  application_id: string;
+  results: ValidationResult[];
+  summary: ValidationSummary;
 };
 
 export type HealthResponse = {
@@ -191,6 +203,44 @@ export async function processDocument(
 export async function fetchDocumentResult(documentId: string, accessToken: string): Promise<DocumentResult> {
   const response = await authRequest(`/documents/${documentId}/result`, accessToken, { method: "GET" });
   return readDocumentResult(response);
+}
+
+function isValidationPayload(value: Record<string, unknown>): value is ValidationPayload {
+  return typeof value.application_id === "string" && Array.isArray(value.results) && !!value.summary && typeof value.summary === "object";
+}
+
+async function readValidation(response: Response): Promise<ValidationPayload> {
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  if (!isValidationPayload(body)) {
+    throw new Error("The server response could not be read.");
+  }
+  const summary = body.summary as ValidationSummary;
+  return {
+    application_id: body.application_id,
+    results: body.results as ValidationResult[],
+    summary: {
+      pass: Number(summary.pass) || 0,
+      warning: Number(summary.warning) || 0,
+      fail: Number(summary.fail) || 0,
+    },
+  };
+}
+
+export async function validateApplication(applicationId: string, accessToken: string): Promise<ValidationPayload> {
+  const response = await authRequest(`/applications/${applicationId}/validate`, accessToken, { method: "POST" });
+  return readValidation(response);
+}
+
+export async function fetchValidation(applicationId: string, accessToken: string): Promise<ValidationPayload> {
+  const response = await authRequest(`/applications/${applicationId}/validation`, accessToken, { method: "GET" });
+  return readValidation(response);
 }
 
 export async function deleteApplicationOnServer(applicationId: string, accessToken: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleCheck, CircleX, Clock, LoaderCircle, ScanText, Upload } from "lucide-react";
+import { AlertCircle, AlertTriangle, CircleCheck, CircleX, Clock, LoaderCircle, ScanText, Upload } from "lucide-react";
 
 import type { SlotStatus } from "@/lib/slot-status";
 
@@ -8,6 +8,7 @@ const styles: Record<SlotStatus, { className: string; Icon: typeof Clock }> = {
   Processing: { className: "bg-amber-100 text-amber-800", Icon: LoaderCircle },
   Processed: { className: "bg-teal-100 text-teal-800", Icon: ScanText },
   Passed: { className: "bg-green-100 text-green-800", Icon: CircleCheck },
+  "Check advised": { className: "bg-amber-100 text-amber-800", Icon: AlertCircle },
   "Needs fix": { className: "bg-red-100 text-red-800", Icon: AlertTriangle },
   Failed: { className: "bg-red-100 text-red-800", Icon: CircleX },
 };

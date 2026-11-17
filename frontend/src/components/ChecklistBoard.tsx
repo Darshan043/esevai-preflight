@@ -3,10 +3,14 @@
 // The checklist the citizen sees. Uploads update the progress without reloading the page.
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Card } from "@/components/Card";
+import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
 import { UploadSlot } from "@/components/UploadSlot";
+import { ApiError, NETWORK_ERROR, validateApplication } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 import type { PublicUpload, ValidationResult } from "@/lib/types";
 
 export type ChecklistSlot = {
@@ -33,6 +37,7 @@ export function ChecklistBoard({
   slots: ChecklistSlot[];
   results: ValidationResult[];
 }) {
+  const router = useRouter();
   const [uploads, setUploads] = useState<Record<string, PublicUpload | null>>(() => {
     const initial: Record<string, PublicUpload | null> = {};
     for (const slot of slots) {
@@ -40,7 +45,37 @@ export function ChecklistBoard({
     }
     return initial;
   });
+  const [checks, setChecks] = useState<ValidationResult[]>(results);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkNote, setCheckNote] = useState<string | null>(null);
+  const shared = checks.filter((result) => !result.uploaded_document_id);
   const uploadedCount = slots.filter((slot) => uploads[slot.id]).length;
+
+  async function refreshChecks() {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      router.push(`/login?next=/applications/${applicationId}`);
+      return;
+    }
+    setChecking(true);
+    setCheckError(null);
+    try {
+      const payload = await validateApplication(applicationId, token);
+      setChecks(payload.results);
+      setCheckNote("Checks updated.");
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        router.push(`/login?next=/applications/${applicationId}`);
+        return;
+      }
+      setCheckError(caught instanceof Error ? caught.message : NETWORK_ERROR);
+    } finally {
+      setChecking(false);
+    }
+  }
   const progress = slots.length === 0 ? 0 : Math.round((uploadedCount / slots.length) * 100);
 
   return (
@@ -66,6 +101,20 @@ export function ChecklistBoard({
         </div>
       </header>
       <Disclaimer />
+      <section className="panel" aria-live="polite">
+        <h2 className="text-lg font-semibold text-navy">Checklist checks</h2>
+        {checking ? <p className="mt-2 text-sm text-ink">Checking your documents…</p> : null}
+        {checkNote ? <p className="mt-2 text-sm text-ink">{checkNote}</p> : null}
+        {checkError ? (
+          <div className="mt-2">
+            <p className="text-sm text-red-800">{checkError}</p>
+            <button type="button" className="btn-secondary mt-2" onClick={() => void refreshChecks()}>
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {shared.length > 0 ? <CheckList results={shared} /> : <p className="mt-2 text-sm text-muted">No checklist-wide problems yet.</p>}
+      </section>
       <ul className="flex flex-col gap-4" data-required-count={slots.length}>
         {slots.map((slot, index) => (
           <li key={slot.id}>
@@ -83,7 +132,8 @@ export function ChecklistBoard({
                 applicationId={applicationId}
                 document={slot}
                 upload={uploads[slot.id] ?? null}
-                results={results}
+                results={checks}
+                onActivity={() => void refreshChecks()}
                 onChange={(next) => {
                   setUploads((current) => ({ ...current, [slot.id]: next }));
                 }}
@@ -92,15 +142,20 @@ export function ChecklistBoard({
           </li>
         ))}
       </ul>
-      <div>
-        <button
-          type="button"
-          disabled
-          className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
-        >
-          Run readiness check
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <button type="button" className="btn-primary" onClick={() => void refreshChecks()} disabled={checking}>
+          {checking ? "Checking…" : "Re-run checks"}
         </button>
-        <p className="mt-2 text-sm text-muted">Available in a later step</p>
+        <div>
+          <button
+            type="button"
+            disabled
+            className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
+          >
+            Run readiness check
+          </button>
+          <p className="mt-2 text-sm text-muted">Report available in a later step</p>
+        </div>
       </div>
     </>
   );

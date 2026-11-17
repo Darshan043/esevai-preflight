@@ -33,6 +33,7 @@ class Store:
         self.count = 0
         self.application_deleted = False
         self.validation_deleted = False
+        self.deleted_matches: list[tuple[str, dict[str, str]]] = []
 
 
 def _install(monkeypatch: object, store: Store) -> None:
@@ -104,7 +105,7 @@ def _install(monkeypatch: object, store: Store) -> None:
         return [dict(store.row)]
 
     def delete_rows(table: str, match: dict[str, str]) -> None:
-        del match
+        store.deleted_matches.append((table, dict(match)))
         store.deleted_tables.append(table)
         if table == "validation_results":
             store.validation_deleted = True
@@ -124,6 +125,13 @@ def _install(monkeypatch: object, store: Store) -> None:
     monkeypatch.setattr("app.routers.documents.update_rows", update_rows)
     monkeypatch.setattr("app.routers.documents.delete_rows", delete_rows)
     monkeypatch.setattr("app.routers.documents.create_signed_url", signed)
+
+
+def _cleared_shared_results(store: Store) -> bool:
+    return any(
+        table == "validation_results" and match.get("uploaded_document_id") == "is.null" and match.get("application_id") == f"eq.{APP_ID}"
+        for table, match in store.deleted_matches
+    )
 
 
 def _auth() -> dict[str, str]:
@@ -273,6 +281,7 @@ def test_replace_uploads_new_and_removes_old(monkeypatch: object) -> None:
     assert store.uploads
     assert store.deleted_objects == [f"{USER_ID}/{APP_ID}/photo-old-old.jpg"]
     assert store.validation_deleted
+    assert _cleared_shared_results(store)
     assert response.json()["original_filename"] == "new.png"
     assert "storage_path" not in response.json()
     assert store.row is not None
@@ -326,6 +335,7 @@ def test_delete_document_removes_object_and_row(monkeypatch: object) -> None:
     assert response.headers.get("content-length") == "0"
     assert path in store.deleted_objects
     assert store.row is None
+    assert _cleared_shared_results(store)
 
 
 def test_delete_application_removes_objects_then_row(monkeypatch: object) -> None:

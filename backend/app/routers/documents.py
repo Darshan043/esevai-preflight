@@ -38,6 +38,26 @@ MAX_DOCUMENTS = 20
 SIGNED_URL_SECONDS = 300
 
 
+def _clear_shared_checks(application_id: str) -> None:
+    """Drop checklist-wide results. One file change makes them out of date."""
+    if not application_id:
+        return
+    delete_rows(
+        "validation_results",
+        {"application_id": f"eq.{application_id}", "uploaded_document_id": "is.null"},
+    )
+
+
+def _clear_saved_checks(application_id: str, document_id: str) -> None:
+    """Drop this file's results and the checklist-wide results after a new read."""
+    try:
+        delete_rows("validation_results", {"uploaded_document_id": f"eq.{document_id}"})
+        _clear_shared_checks(application_id)
+    except SupabaseRequestError:
+        # The new reading is already saved. The next check replaces old rows.
+        return
+
+
 def _missing() -> HTTPException:
     return HTTPException(status_code=404, detail="This application was not found.")
 
@@ -222,6 +242,7 @@ async def upload_document(
 
         try:
             delete_rows("validation_results", {"uploaded_document_id": f"eq.{existing['id']}"})
+            _clear_shared_checks(application_id)
         except SupabaseRequestError as exc:
             if _restore_path(str(existing["id"]), old_path):
                 delete_objects([path])
@@ -285,6 +306,7 @@ def delete_document(
         if path:
             delete_objects([path])
         delete_rows("validation_results", {"uploaded_document_id": f"eq.{document_id}"})
+        _clear_shared_checks(str(document.get("application_id") or ""))
         delete_rows("uploaded_documents", {"id": f"eq.{document_id}", "user_id": f"eq.{user.user_id}"})
     except SupabaseRequestError as exc:
         raise HTTPException(status_code=502, detail="The file could not be deleted.") from exc
@@ -411,6 +433,7 @@ async def process_upload(
     except Exception as exc:
         message = _friendly_error(exc)
         failed = _save_failure(row, message)
+        _clear_saved_checks(str(row.get("application_id") or ""), document_id)
         logger.info("ocr failed document=%s error_type=%s", document_id, type(exc).__name__)
         body = _result_body(failed)
         return JSONResponse(status_code=422, content={"detail": message, **body})
@@ -445,6 +468,7 @@ async def process_upload(
         "quality_metrics": metrics,
         "ocr_text_masked": masked_text,
     }
+    _clear_saved_checks(str(saved.get("application_id") or row.get("application_id") or ""), document_id)
     elapsed_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
     logger.info("ocr finished document=%s status=processed ms=%s", document_id, elapsed_ms)
     return JSONResponse(status_code=200, content=_result_body(saved))

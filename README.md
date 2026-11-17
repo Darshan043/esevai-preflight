@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 7 complete – image processing and OCR
+Step 8 complete – document validation engine
 
 ## Authentication
 
@@ -70,6 +70,26 @@ Try one local file without the database:
 cd backend
 .\.venv\Scripts\python.exe scripts\ocr_demo.py C:\path\to\document.jpg
 ```
+
+## Validation
+
+After a document is read, the checklist can run config-driven checks. The rules live on each `required_documents` row (`keywords`, `required_fields`, `rules`, `validity_days`). The engine does not hard-code one service.
+
+Checks:
+
+- Photo quality: sharpness, blank page, size, brightness, tilt, and OCR confidence
+- Document type: English or Tamil keywords, with a close spelling accepted
+- Required details: name, date, and number when the row asks for them
+- ID number: Verhoeff checksum when `rules.id_number_pattern` is set. Only the last 4 digits are kept
+- Document date: too old, missing, or in the future when an age limit is set
+- Name match across documents when `rules.check_name_match` is true
+- Missing mandatory slots
+
+If a rule key is missing, the defaults are: blur below 100 fails, a blank page fails, a small photo warns, brightness outside 40–220 warns, OCR confidence below 40 warns, and tilt above 15 degrees warns.
+
+Name and date reading is a best guess from labels and simple patterns. Step 9 will improve it with AI. The readiness score and report are Step 10.
+
+`POST /applications/{id}/validate` replaces saved results. `GET /applications/{id}/validation` reads them. Both require the owner.
 
 ## Database
 

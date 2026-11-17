@@ -12,14 +12,14 @@ from PIL import Image, ImageDraw, ImageFont
 from app.config import settings
 from app.main import app
 from app.processing.loader import DocumentUnreadableError, load_document
-from app.processing.masking import extract_masked_id_suffixes, mask_sensitive
+from app.processing.masking import check_id_numbers, extract_masked_id_suffixes, mask_sensitive, verhoeff_checksum
 from app.processing.ocr import run_ocr
 from app.processing.pipeline import process_document
 from app.processing.preprocess import prepare_for_ocr, threshold_for_ocr
 from app.processing.quality import measure_quality
 from fastapi.testclient import TestClient
 from tests.test_auth import _token
-from tests.test_documents import UPLOAD_ID, _auth, _install
+from tests.test_documents import APP_ID, UPLOAD_ID, _auth, _cleared_shared_results, _install
 from tests.test_documents import Store
 
 client = TestClient(app)
@@ -145,6 +145,50 @@ def test_masking_hides_ids_and_leaves_everyday_numbers() -> None:
     assert extract_masked_id_suffixes("XXXX XXXX 9012") == ["9012"]
 
 
+def test_id_checksum_reports_last4_only() -> None:
+    # Independent Verhoeff tables, so this test does not trust the app's copy.
+    multiplication = (
+        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        (1, 2, 3, 4, 0, 6, 7, 8, 9, 5),
+        (2, 3, 4, 0, 1, 7, 8, 9, 5, 6),
+        (3, 4, 0, 1, 2, 8, 9, 5, 6, 7),
+        (4, 0, 1, 2, 3, 9, 5, 6, 7, 8),
+        (5, 9, 8, 7, 6, 0, 4, 3, 2, 1),
+        (6, 5, 9, 8, 7, 1, 0, 4, 3, 2),
+        (7, 6, 5, 9, 8, 2, 1, 0, 4, 3),
+        (8, 7, 6, 5, 9, 3, 2, 1, 0, 4),
+        (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),
+    )
+    permutation = (
+        (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        (1, 5, 7, 6, 2, 8, 3, 0, 9, 4),
+        (5, 8, 0, 3, 7, 9, 6, 1, 4, 2),
+        (8, 9, 1, 6, 0, 4, 3, 5, 2, 7),
+        (9, 4, 5, 3, 1, 2, 6, 8, 7, 0),
+        (4, 2, 8, 6, 5, 7, 3, 9, 0, 1),
+        (2, 7, 9, 3, 8, 0, 6, 4, 1, 5),
+        (7, 0, 4, 6, 9, 1, 3, 2, 5, 8),
+    )
+    inverse = (0, 4, 3, 2, 1, 5, 6, 7, 8, 9)
+
+    def checksum(number: str) -> int:
+        check = 0
+        for index, char in enumerate(reversed(number)):
+            check = multiplication[check][permutation[index % 8][int(char)]]
+        return check
+
+    body = "23456789012"
+    valid = body + str(inverse[checksum(body + "0")])
+    changed = valid[:5] + ("0" if valid[5] != "0" else "1") + valid[6:]
+    good = check_id_numbers(valid)
+    bad = check_id_numbers(changed)
+    assert good == [{"type": "aadhaar", "last4": valid[-4:], "checksum_valid": True}]
+    assert bad[0]["checksum_valid"] is False
+    assert valid not in str(good)
+    assert changed not in str(bad)
+    assert verhoeff_checksum(valid) == 0
+
+
 def test_masking_covers_line_breaks_adjacent_ids_and_mixed_text() -> None:
     def once(source: str) -> str:
         masked, _count = mask_sensitive(source)
@@ -243,6 +287,10 @@ def test_pipeline_masks_a_number_in_the_image(caplog: pytest.LogCaptureFixture) 
     assert "1234 5678" not in masked
     assert "1234 5678" not in caplog.text
     assert "123456789012" not in caplog.text
+    checks = result["quality_metrics"]["id_checks"]
+    assert isinstance(checks, list)
+    assert all(len(str(item["last4"])) == 4 for item in checks)
+    assert "123456789012" not in str(checks)
 
 
 def _row(**extra: object) -> dict[str, object]:
@@ -297,7 +345,7 @@ def test_another_user_cannot_process_or_read(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_process_saves_masked_text(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     store = Store()
-    store.row = _row()
+    store.row = _row(application_id=APP_ID)
     _patch_pipeline(
         monkeypatch,
         store,
@@ -318,6 +366,7 @@ def test_process_saves_masked_text(monkeypatch: pytest.MonkeyPatch, caplog: pyte
     assert store.row["extracted_fields"] == {}
     assert store.row["quality_metrics"] == {"blur_score": 12}
     assert "LEAKME" not in caplog.text
+    assert _cleared_shared_results(store)
     assert "1234 5678" not in caplog.text
     assert SECRET_PATH not in caplog.text
 

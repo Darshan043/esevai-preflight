@@ -6,6 +6,7 @@ export type SlotStatus =
   | "Processing"
   | "Processed"
   | "Passed"
+  | "Check advised"
   | "Needs fix"
   | "Failed";
 
@@ -27,11 +28,15 @@ export function slotStatus(
     return "Failed";
   }
 
-  // "Passed" and "Needs fix" wait for Step 8. Until then a finished read is only "Processed".
   const own = results.filter((result) => result.uploaded_document_id === upload.id);
   if (own.length === 0) {
     return "Processed";
   }
-  const failed = own.some((result) => result.status === "fail");
-  return failed ? "Needs fix" : "Passed";
+  if (own.some((result) => result.status === "fail")) {
+    return "Needs fix";
+  }
+  if (own.some((result) => result.status === "warning")) {
+    return "Check advised";
+  }
+  return "Passed";
 }

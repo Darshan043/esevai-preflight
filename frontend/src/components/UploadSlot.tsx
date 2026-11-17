@@ -6,6 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { CheckList } from "@/components/CheckList";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   ApiError,
@@ -102,7 +103,7 @@ function QualityPanel({ metrics, text }: { metrics: Record<string, unknown>; tex
           {text?.trim() ? text : "No text was read."}
         </pre>
       </details>
-      <p className="mt-2 text-sm text-muted">Final checks come in the next step.</p>
+      <p className="mt-2 text-sm text-muted">These numbers describe the photo. The checks below say what to fix.</p>
     </section>
   );
 }
@@ -119,12 +120,14 @@ export function UploadSlot({
   upload,
   results,
   onChange,
+  onActivity,
 }: {
   applicationId: string;
   document: SlotDocument;
   upload: PublicUpload | null;
   results: ValidationResult[];
   onChange: (next: PublicUpload | null) => void;
+  onActivity?: () => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -270,6 +273,7 @@ export function UploadSlot({
         ocr_text_masked: result.ocr_text_masked,
       });
       setProcessError(null);
+      onActivity?.();
     } catch (caught) {
       if (ignoreRef.current || (caught instanceof DOMException && caught.name === "AbortError")) {
         return;
@@ -290,6 +294,7 @@ export function UploadSlot({
         });
       }
       setProcessError(caught instanceof Error ? caught.message : NETWORK_ERROR);
+      onActivity?.();
     } finally {
       if (abortRef.current === controller) {
         setReading(false);
@@ -349,6 +354,7 @@ export function UploadSlot({
       onChange(null);
       setConfirmingDelete(false);
       setMessage(null);
+      onActivity?.();
       router.refresh();
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
@@ -522,6 +528,7 @@ export function UploadSlot({
       {shown && shown.status === "processed" && !waiting ? (
         <QualityPanel metrics={shown.quality_metrics ?? {}} text={shown.ocr_text_masked ?? null} />
       ) : null}
+      {shown ? <CheckList results={results.filter((result) => result.uploaded_document_id === shown.id)} /> : null}
       {previewUrl ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/70 p-4" role="dialog" aria-modal="true" aria-label="Document preview">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-4">

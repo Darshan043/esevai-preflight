@@ -26,3 +26,4 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 5 – frontend core UI: landing, services, checklist, and my applications
 - [x] Step 6 – file upload and storage: validated uploads, signed previews, replace and delete
 - [x] Step 7 – image processing and OCR: quality metrics, Tesseract eng+tam, ID masking
+- [x] Step 8 – document validation engine: config-driven checks, cross-document checks, results UI

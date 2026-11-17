@@ -41,6 +41,76 @@ def mask_sensitive(text: str) -> tuple[str, int]:
     return "".join(pieces), len(spans)
 
 
+# Verhoeff tables. Aadhaar uses this checksum. The last digit is the check digit.
+_VERHOEFF_D = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 2, 3, 4, 0, 6, 7, 8, 9, 5),
+    (2, 3, 4, 0, 1, 7, 8, 9, 5, 6),
+    (3, 4, 0, 1, 2, 8, 9, 5, 6, 7),
+    (4, 0, 1, 2, 3, 9, 5, 6, 7, 8),
+    (5, 9, 8, 7, 6, 0, 4, 3, 2, 1),
+    (6, 5, 9, 8, 7, 1, 0, 4, 3, 2),
+    (7, 6, 5, 9, 8, 2, 1, 0, 4, 3),
+    (8, 7, 6, 5, 9, 3, 2, 1, 0, 4),
+    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),
+)
+_VERHOEFF_P = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 5, 7, 6, 2, 8, 3, 0, 9, 4),
+    (5, 8, 0, 3, 7, 9, 6, 1, 4, 2),
+    (8, 9, 1, 6, 0, 4, 3, 5, 2, 7),
+    (9, 4, 5, 3, 1, 2, 6, 8, 7, 0),
+    (4, 2, 8, 6, 5, 7, 3, 9, 0, 1),
+    (2, 7, 9, 3, 8, 0, 6, 4, 1, 5),
+    (7, 0, 4, 6, 9, 1, 3, 2, 5, 8),
+)
+_VERHOEFF_INV = (0, 4, 3, 2, 1, 5, 6, 7, 8, 9)
+
+
+def verhoeff_checksum(number: str) -> int:
+    """Walk the digits from the right. Zero means the check digit matches."""
+    check = 0
+    for index, char in enumerate(reversed(number)):
+        check = _VERHOEFF_D[check][_VERHOEFF_P[index % 8][int(char)]]
+    return check
+
+
+def verhoeff_valid(number: str) -> bool:
+    """True when every character is a digit and the Verhoeff check digit matches."""
+    return number.isdigit() and verhoeff_checksum(number) == 0
+
+
+def verhoeff_check_digit(body: str) -> str:
+    """Return the digit that makes body + digit pass the Verhoeff check."""
+    return str(_VERHOEFF_INV[verhoeff_checksum(f"{body}0")])
+
+
+def check_id_numbers(text: str) -> list[dict[str, object]]:
+    """Find 12-digit IDs and report only the last 4 digits plus the checksum.
+
+    Tamil digits are converted for detection, the same way masking does it.
+    A 16-digit number is not reported here. The full number is never returned.
+    """
+    if not text:
+        return []
+    folded = text.translate(_TAMIL_TO_ASCII)
+    found: list[dict[str, object]] = []
+    for start, end, last4, width in _id_spans(folded):
+        if width != 12 or len(last4) != 4:
+            continue
+        digits = _digits(folded[start:end])
+        if len(digits) != 12:
+            continue
+        found.append(
+            {
+                "type": "aadhaar",
+                "last4": last4,
+                "checksum_valid": verhoeff_valid(digits),
+            }
+        )
+    return found
+
+
 def extract_masked_id_suffixes(text: str) -> list[str]:
     """Return only the last 4 digits of each ID. Never the full number."""
     if not text:

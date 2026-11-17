@@ -48,9 +48,11 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={(event) => void onSubmit(event)} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-zinc-900">Login</h1>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="email">
+    <form onSubmit={(event) => void onSubmit(event)} className="panel">
+      <p className="text-sm font-semibold text-royal">Account</p>
+      <h1 className="mt-1 text-2xl font-semibold text-navy">Login</h1>
+      <p className="mt-2 text-sm text-muted">Use the email and password for your e-Sevai Pre-Flight account.</p>
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="email">
         Email
         <input
           id="email"
@@ -58,10 +60,10 @@ export function LoginForm() {
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="password">
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="password">
         Password
         <input
           id="password"
@@ -69,15 +71,11 @@ export function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-6 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-60"
-      >
+      {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+      <button type="submit" disabled={pending} className="btn-primary mt-6 w-full">
         {pending ? "Signing in..." : "Login"}
       </button>
     </form>

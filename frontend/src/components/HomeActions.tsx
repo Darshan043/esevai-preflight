@@ -3,10 +3,8 @@ import { connection } from "next/server";
 
 import { getUserAndProfile } from "@/lib/supabase/server";
 
-const primaryClass =
-  "inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
-const secondaryClass =
-  "inline-flex min-h-11 items-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
+const primaryClass = "btn-on-dark";
+const secondaryClass = "btn-on-dark-ghost";
 
 export async function HomeActions() {
   // These buttons depend on the signed-in request. Wait until request time so
@@ -17,7 +15,7 @@ export async function HomeActions() {
   return (
     <div className="flex flex-wrap gap-3">
       <Link href="/services" className={primaryClass}>
-        Browse services
+        Check Your Documents
       </Link>
       {current ? (
         <Link href="/applications" className={secondaryClass}>

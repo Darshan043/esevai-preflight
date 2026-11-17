@@ -23,32 +23,42 @@ export async function DashboardContent() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">Welcome, {name}</h1>
-        <p className="mt-2 text-zinc-600">{current.email ?? "No email on this account"}</p>
-        <p className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-800">{role}</p>
-      </div>
-      <p className="text-zinc-700">
-        You have {applicationCount} application{applicationCount === 1 ? "" : "s"}.
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <header className="page-banner">
+        <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Citizen dashboard</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-navy">Welcome, {name}</h1>
+        <p className="mt-2 text-muted">{current.email ?? "No email on this account"}</p>
+      </header>
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <h2 className="text-lg font-semibold text-zinc-900">Browse services</h2>
-          <p className="mt-2 text-sm text-zinc-600">See the services you can prepare for.</p>
-          <Link
-            href="/services"
-            className="mt-4 inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-          >
+          <p className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Applications</p>
+          <p className="mt-2 text-3xl font-semibold text-navy">{applicationCount}</p>
+          <p className="mt-1 text-sm text-muted">
+            {applicationCount === 1 ? "application on this account" : "applications on this account"}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Account role</p>
+          <p className="mt-2 text-xl font-semibold text-navy capitalize">{role}</p>
+          <p className="mt-1 text-sm text-muted">Taken from your profile</p>
+        </Card>
+        <Card>
+          <p className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Language</p>
+          <p className="mt-2 text-xl font-semibold text-navy">English / Tamil</p>
+          <p className="mt-1 text-sm text-muted">Switch document names from the menu</p>
+        </Card>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="service-card">
+          <h2 className="text-lg font-semibold text-navy">Browse services</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">See the services you can prepare for.</p>
+          <Link href="/services" className="btn-primary mt-4">
             Browse services
           </Link>
         </Card>
-        <Card>
-          <h2 className="text-lg font-semibold text-zinc-900">My applications</h2>
-          <p className="mt-2 text-sm text-zinc-600">Open a document check you already started.</p>
-          <Link
-            href="/applications"
-            className="mt-4 inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-          >
+        <Card className="service-card">
+          <h2 className="text-lg font-semibold text-navy">My applications</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">Open a document check you already started.</p>
+          <Link href="/applications" className="btn-primary mt-4">
             My applications
           </Link>
         </Card>

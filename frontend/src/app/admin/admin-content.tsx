@@ -16,16 +16,21 @@ export async function AdminContent() {
   // A citizen gets only this message. The admin check is not rendered for them.
   if (current.profile?.role !== "admin") {
     return (
-      <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold text-zinc-900">Access denied</h1>
-        <p className="mt-2 text-zinc-600">This page is only for admin accounts.</p>
+      <section className="page-banner">
+        <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Administration</p>
+        <h1 className="mt-1 text-2xl font-semibold text-navy">Access denied</h1>
+        <p className="mt-2 text-muted">This page is only for admin accounts.</p>
       </section>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">Admin area</h1>
+      <header className="page-banner">
+        <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Administration</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-navy">Admin area</h1>
+        <p className="mt-2 text-muted">This account has admin access. The check below talks to the existing admin API.</p>
+      </header>
       <AdminPing />
     </div>
   );

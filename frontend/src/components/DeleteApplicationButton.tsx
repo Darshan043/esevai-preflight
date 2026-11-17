@@ -19,7 +19,7 @@ export function DeleteApplicationButton({ applicationId }: { applicationId: stri
         setPending(true);
         void deleteApplication(applicationId);
       }}
-      className="inline-flex min-h-11 items-center rounded-md border border-red-300 px-4 text-sm font-medium text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-60"
+      className="btn-secondary border-red-200 text-red-800 hover:bg-red-50"
     >
       {pending ? "Deleting..." : "Delete"}
     </button>

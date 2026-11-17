@@ -59,9 +59,9 @@ export function AdminPing() {
   }, [attempt, router]);
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h2 className="text-xl font-medium text-zinc-900">Admin check</h2>
-      {loading ? <p className="mt-4 text-zinc-600">Checking admin access...</p> : null}
+    <section className="panel">
+      <h2 className="text-xl font-semibold text-navy">Admin check</h2>
+      {loading ? <p className="mt-4 text-muted">Checking admin access...</p> : null}
       {!loading && error ? (
         <div className="mt-4">
           <p className="text-red-600">{error}</p>
@@ -73,13 +73,13 @@ export function AdminPing() {
               setResult(null);
               setAttempt((current) => current + 1);
             }}
-            className="mt-3 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white"
+            className="btn-primary mt-3"
           >
             Retry
           </button>
         </div>
       ) : null}
-      {!loading && result ? <p className="mt-4 text-zinc-800">{result.message}</p> : null}
+      {!loading && result ? <p className="mt-4 text-ink">{result.message}</p> : null}
     </section>
   );
 }

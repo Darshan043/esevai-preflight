@@ -15,7 +15,7 @@ export function StatusBadge({ status }: { status: SlotStatus }) {
   const { className, Icon } = styles[status];
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border border-black/5 px-2.5 py-1 text-sm font-semibold ${className}`}>
       <Icon aria-hidden="true" className="h-4 w-4" />
       {status}
     </span>

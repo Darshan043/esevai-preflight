@@ -31,7 +31,7 @@ export function LanguageToggle({
   }
 
   return (
-    <div className="inline-flex overflow-hidden rounded-md border border-zinc-300" role="group" aria-label="Document language">
+    <div className="inline-flex overflow-hidden rounded-lg border border-white/30" role="group" aria-label="Document language">
       <button
         type="button"
         aria-pressed={language === "en"}
@@ -39,8 +39,8 @@ export function LanguageToggle({
         onClick={() => {
           void choose("en");
         }}
-        className={`inline-flex min-h-11 items-center px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
-          language === "en" ? "bg-zinc-900 text-white" : "bg-white text-zinc-800"
+        className={`inline-flex min-h-11 items-center px-3 text-sm ${
+          language === "en" ? "bg-white text-navy" : "bg-transparent text-white"
         }`}
       >
         EN
@@ -52,8 +52,8 @@ export function LanguageToggle({
         onClick={() => {
           void choose("ta");
         }}
-        className={`inline-flex min-h-11 items-center px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
-          language === "ta" ? "bg-zinc-900 text-white" : "bg-white text-zinc-800"
+        className={`inline-flex min-h-11 items-center px-3 text-sm ${
+          language === "ta" ? "bg-white text-navy" : "bg-transparent text-white"
         }`}
       >
         தமிழ்

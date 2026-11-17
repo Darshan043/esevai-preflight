@@ -15,10 +15,8 @@ import { getUserAndProfile } from "@/lib/supabase/server";
 // Unknown slugs must answer 404 before the page starts streaming.
 export const instant = false;
 
-const buttonClass =
-  "inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
-const secondaryClass =
-  "inline-flex min-h-11 items-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
+const buttonClass = "btn-primary";
+const secondaryClass = "btn-secondary";
 
 function validityText(days: number | null): string | null {
   if (days == null) {
@@ -45,13 +43,14 @@ async function ServiceDetail({
 
   return (
     <>
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">{pickName(service, language)}</h1>
-        {service.description ? <p className="mt-2 text-zinc-600">{service.description}</p> : null}
+      <header className="page-banner">
+        <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Service details</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-navy">{pickName(service, language)}</h1>
+        {service.description ? <p className="mt-2 max-w-3xl leading-7 text-muted">{service.description}</p> : null}
         {service.is_verified ? (
-          <p className="mt-3 text-sm font-medium text-green-800">Verified</p>
+          <p className="mt-3 text-sm font-medium text-india">Verified</p>
         ) : (
-          <p className="mt-3 text-sm text-amber-800">Draft list – confirm on the official portal</p>
+          <p className="mt-3 text-sm text-saffron">Draft list – confirm on the official portal</p>
         )}
       </header>
       <Disclaimer />
@@ -61,23 +60,28 @@ async function ServiceDetail({
         </p>
       ) : null}
       <section className="flex flex-col gap-4">
-        <h2 className="text-2xl font-semibold text-zinc-900">Documents you need</h2>
+        <h2 className="section-title">Documents you need</h2>
         <ul className="flex flex-col gap-4" data-required-count={documents.length}>
-          {documents.map((document) => {
+          {documents.map((document, index) => {
             const validity = validityText(document.validity_days);
             return (
               <li key={document.id}>
-                <Card>
-                  <h3 className="text-lg font-semibold text-zinc-900">{pickName(document, language)}</h3>
-                  <p className="mt-2 text-sm font-medium text-zinc-700">
-                    {document.is_mandatory ? "Mandatory" : "Optional"}
-                  </p>
-                  {document.description ? <p className="mt-2 text-zinc-600">{document.description}</p> : null}
-                  <p className="mt-2 text-sm text-zinc-700">
+                <Card className="service-card">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h3 className="text-lg font-semibold text-navy">
+                      <span className="mr-2 text-sm font-semibold text-royal">{index + 1}.</span>
+                      {pickName(document, language)}
+                    </h3>
+                    <p className="rounded-full bg-sky px-3 py-1 text-sm font-medium text-navy">
+                      {document.is_mandatory ? "Mandatory" : "Optional"}
+                    </p>
+                  </div>
+                  {document.description ? <p className="mt-2 text-muted">{document.description}</p> : null}
+                  <p className="mt-2 text-sm text-ink">
                     Accepted formats: {document.accepted_formats.join(", ")}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-700">Maximum size: {document.max_size_mb} MB</p>
-                  {validity ? <p className="mt-1 text-sm text-zinc-700">{validity}</p> : null}
+                  <p className="mt-1 text-sm text-ink">Maximum size: {document.max_size_mb} MB</p>
+                  {validity ? <p className="mt-1 text-sm text-ink">{validity}</p> : null}
                 </Card>
               </li>
             );

@@ -46,11 +46,11 @@ export function SystemStatus() {
     <section
       id="system-status"
       aria-label="System status"
-      className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+      className="panel"
     >
-      <h2 className="text-xl font-medium text-zinc-900">System status</h2>
+      <h2 className="text-xl font-semibold text-navy">System status</h2>
 
-      {loading ? <p className="mt-4 text-zinc-600">Checking the backend...</p> : null}
+      {loading ? <p className="mt-4 text-muted">Checking the backend...</p> : null}
 
       {!loading && error ? (
         <div className="mt-4">
@@ -63,7 +63,7 @@ export function SystemStatus() {
               setHealth(null);
               setAttempt((current) => current + 1);
             }}
-            className="mt-3 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white"
+            className="btn-primary mt-3"
           >
             Retry
           </button>
@@ -71,7 +71,7 @@ export function SystemStatus() {
       ) : null}
 
       {!loading && health ? (
-        <dl className="mt-4 space-y-2 text-sm text-zinc-800">
+        <dl className="mt-4 space-y-2 text-sm text-ink">
           <div>
             <dt className="inline font-medium">Backend status: </dt>
             <dd className="inline">{connected ? "Connected" : "Not reachable"}</dd>

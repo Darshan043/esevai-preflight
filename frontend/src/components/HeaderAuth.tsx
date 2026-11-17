@@ -4,6 +4,7 @@
 // The first render always shows the logged-out links so prerender stays stable.
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -14,8 +15,11 @@ import { createClient } from "@/lib/supabase/client";
 
 type HeaderState = "logged-out" | "logged-in";
 
-const linkClass =
-  "inline-flex min-h-11 items-center rounded-md px-2 text-sm text-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
+const linkClass = "nav-link inline-flex";
+
+function isCurrent(href: string, pathname: string) {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function HeaderAuth({ initialLanguage }: { initialLanguage: Language }) {
   const [state, setState] = useState<HeaderState>("logged-out");
@@ -74,13 +78,29 @@ export function HeaderAuth({ initialLanguage }: { initialLanguage: Language }) {
     };
   }, [initialLanguage]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setIsAdmin(false);
+        setUserId(null);
+        setState("logged-out");
+        setMenuOpen(false);
+      }
+    });
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
   const signedIn = state === "logged-in";
+  const pathname = usePathname();
 
   return (
     <>
       <button
         type="button"
-        className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 md:hidden"
+        className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-white md:hidden"
         aria-expanded={menuOpen}
         aria-controls="site-menu"
         onClick={() => setMenuOpen((open) => !open)}
@@ -90,27 +110,27 @@ export function HeaderAuth({ initialLanguage }: { initialLanguage: Language }) {
       </button>
       <div
         id="site-menu"
-        className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 md:ml-auto md:flex md:w-auto md:flex-row md:items-center md:gap-3`}
+        className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 py-2 md:flex md:flex-row md:items-center md:gap-3 md:py-0`}
       >
-        <nav className="flex flex-col gap-1 md:flex-row md:items-center" aria-label="Main">
-          <Link href="/" className={linkClass}>
+        <nav className="flex flex-col gap-1 md:mr-auto md:flex-row md:items-center" aria-label="Main">
+          <Link href="/" className={linkClass} aria-current={isCurrent("/", pathname) ? "page" : undefined}>
             Home
           </Link>
-          <Link href="/services" className={linkClass}>
+          <Link href="/services" className={linkClass} aria-current={isCurrent("/services", pathname) ? "page" : undefined}>
             Services
           </Link>
           {signedIn ? (
-            <Link href="/applications" className={linkClass}>
+            <Link href="/applications" className={linkClass} aria-current={isCurrent("/applications", pathname) ? "page" : undefined}>
               My applications
             </Link>
           ) : null}
           {signedIn ? (
-            <Link href="/dashboard" className={linkClass}>
+            <Link href="/dashboard" className={linkClass} aria-current={isCurrent("/dashboard", pathname) ? "page" : undefined}>
               Dashboard
             </Link>
           ) : null}
           {signedIn && isAdmin ? (
-            <Link href="/admin" className={linkClass}>
+            <Link href="/admin" className={linkClass} aria-current={isCurrent("/admin", pathname) ? "page" : undefined}>
               Admin
             </Link>
           ) : null}
@@ -121,13 +141,10 @@ export function HeaderAuth({ initialLanguage }: { initialLanguage: Language }) {
             <SignOutButton />
           ) : (
             <>
-              <Link href="/login" className={linkClass}>
+              <Link href="/login" className={linkClass} aria-current={isCurrent("/login", pathname) ? "page" : undefined}>
                 Login
               </Link>
-              <Link
-                href="/signup"
-                className="inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-              >
+              <Link href="/signup" className="btn-primary" aria-current={isCurrent("/signup", pathname) ? "page" : undefined}>
                 Sign up
               </Link>
             </>

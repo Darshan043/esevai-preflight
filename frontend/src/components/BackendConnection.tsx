@@ -60,9 +60,9 @@ export function BackendConnection() {
   }, [attempt, router]);
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h2 className="text-xl font-medium text-zinc-900">Backend connection</h2>
-      {loading ? <p className="mt-4 text-zinc-600">Checking the signed-in API...</p> : null}
+    <section className="panel">
+      <h2 className="text-xl font-semibold text-navy">Backend connection</h2>
+      {loading ? <p className="mt-4 text-muted">Checking the signed-in API...</p> : null}
       {!loading && error ? (
         <div className="mt-4">
           <p className="text-red-600">{error}</p>
@@ -74,14 +74,14 @@ export function BackendConnection() {
               setMe(null);
               setAttempt((current) => current + 1);
             }}
-            className="mt-3 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white"
+            className="btn-primary mt-3"
           >
             Retry
           </button>
         </div>
       ) : null}
       {!loading && me ? (
-        <dl className="mt-4 space-y-2 text-sm text-zinc-800">
+        <dl className="mt-4 space-y-2 text-sm text-ink">
           <div>
             <dt className="inline font-medium">Result: </dt>
             <dd className="inline">Success</dd>

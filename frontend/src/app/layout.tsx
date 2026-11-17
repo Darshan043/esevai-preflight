@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Noto_Sans, Noto_Sans_Tamil } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const noto = Noto_Sans({
   subsets: ["latin"],
+  variable: "--font-noto",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const notoTamil = Noto_Sans_Tamil({
+  subsets: ["tamil"],
+  variable: "--font-tamil",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -22,15 +25,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${noto.variable} ${notoTamil.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">
         <Suspense fallback={null}>
           <SiteHeader />
         </Suspense>
-        {children}
+        <div id="content" className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

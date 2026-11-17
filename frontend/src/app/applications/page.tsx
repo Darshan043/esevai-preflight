@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { PageBanner } from "@/components/PageBanner";
 import { PageContainer } from "@/components/PageContainer";
 import { getRequestLanguage, listMyApplications } from "@/lib/catalog";
 import { pickName } from "@/lib/language";
@@ -41,20 +42,24 @@ async function ApplicationList({ searchParams }: { searchParams: Promise<{ error
         <ul className="flex flex-col gap-4">
           {result.items.map((item) => (
             <li key={item.id}>
-              <Card>
-                <h2 className="text-xl font-semibold text-zinc-900">{pickName(item.serviceName, language)}</h2>
-                <p className="mt-2 text-sm text-zinc-700">Started {item.created_at.slice(0, 10)}</p>
-                <p className="mt-1 text-sm text-zinc-700">Status: {item.status === "checked" ? "Checked" : "Draft"}</p>
+              <Card className="service-card">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="text-xl font-semibold text-navy">{pickName(item.serviceName, language)}</h2>
+                  <p className="rounded-full bg-sky px-3 py-1 text-sm font-medium text-navy">
+                    {item.status === "checked" ? "Checked" : "Draft"}
+                  </p>
+                </div>
+                <p className="mt-3 text-sm text-ink">Started {item.created_at.slice(0, 10)}</p>
                 {item.readiness_score != null ? (
-                  <p className="mt-1 text-sm text-zinc-700">Readiness score: {item.readiness_score}</p>
+                  <p className="mt-1 text-sm text-ink">Readiness score: {item.readiness_score}</p>
                 ) : null}
-                <p className="mt-1 text-sm text-zinc-700">
+                <p className="mt-1 text-sm text-ink">
                   {item.uploadedCount} of {item.requiredCount} required documents uploaded
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Link
                     href={`/applications/${item.id}`}
-                    className="inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+                    className="btn-primary"
                   >
                     Open
                   </Link>
@@ -76,10 +81,9 @@ export default function ApplicationsPage({
 }) {
   return (
     <PageContainer>
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">My applications</h1>
-        <p className="mt-2 text-zinc-600">Open a draft or start again from the service list.</p>
-      </header>
+      <PageBanner kicker="Your account" title="My applications">
+        Open a draft or start again from the service list.
+      </PageBanner>
       <Suspense fallback={<LoadingSkeleton label="Loading applications" />}>
         <ApplicationList searchParams={searchParams} />
       </Suspense>

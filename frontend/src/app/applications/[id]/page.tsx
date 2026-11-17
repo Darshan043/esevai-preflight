@@ -57,64 +57,68 @@ async function Checklist({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <>
-      <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">{pickName(service, language)}</h1>
-        <p className="text-sm text-zinc-700">
-          Application status: {application.status === "checked" ? "Checked" : "Draft"}
+      <header className="page-banner flex flex-col gap-3">
+        <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Document checklist</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-navy">{pickName(service, language)}</h1>
+        <p className="inline-flex w-fit rounded-full bg-sky px-3 py-1 text-sm font-medium text-navy">
+          {application.status === "checked" ? "Checked" : "Draft"}
         </p>
         <div>
-          <p className="text-sm font-medium text-zinc-800" id="upload-progress-label">
+          <p className="text-sm font-medium text-ink" id="upload-progress-label">
             {uploadedCount} of {documents.length} required documents uploaded
           </p>
           <div
-            className="mt-2 h-3 overflow-hidden rounded-full bg-zinc-200"
+            className="mt-2 h-3 overflow-hidden rounded-full bg-sky"
             role="progressbar"
             aria-labelledby="upload-progress-label"
             aria-valuemin={0}
             aria-valuemax={documents.length}
             aria-valuenow={uploadedCount}
           >
-            <div className="h-full bg-zinc-900" style={{ width: `${progress}%` }} />
+            <div className="h-full bg-royal" style={{ width: `${progress}%` }} />
           </div>
         </div>
       </header>
       <Disclaimer />
       <ul className="flex flex-col gap-4" data-required-count={documents.length}>
-        {documents.map((document) => {
+        {documents.map((document, index) => {
           const upload = uploads.find((item) => item.required_document_id === document.id) ?? null;
           const status = slotStatus(upload, results);
           const validity = validityText(document.validity_days);
           return (
             <li key={document.id}>
-              <Card>
+              <Card className="service-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <h2 className="text-xl font-semibold text-zinc-900">{pickName(document, language)}</h2>
+                  <h2 className="text-xl font-semibold text-navy">
+                    <span className="mr-2 text-sm font-semibold text-royal">{index + 1}.</span>
+                    {pickName(document, language)}
+                  </h2>
                   <StatusBadge status={status} />
                 </div>
-                <p className="mt-2 text-sm font-medium text-zinc-700">
+                <p className="mt-2 text-sm font-medium text-ink">
                   {document.is_mandatory ? "Mandatory" : "Optional"}
                 </p>
                 {document.description ? (
-                  <p className="mt-2 text-zinc-600">Tip: {document.description}</p>
+                  <p className="mt-2 text-muted">Tip: {document.description}</p>
                 ) : null}
-                <p className="mt-2 text-sm text-zinc-700">
+                <p className="mt-2 text-sm text-ink">
                   Accepted formats: {document.accepted_formats.join(", ")}
                 </p>
-                <p className="mt-1 text-sm text-zinc-700">Maximum size: {document.max_size_mb} MB</p>
-                {validity ? <p className="mt-1 text-sm text-zinc-700">{validity}</p> : null}
+                <p className="mt-1 text-sm text-ink">Maximum size: {document.max_size_mb} MB</p>
+                {validity ? <p className="mt-1 text-sm text-ink">{validity}</p> : null}
                 {upload ? (
-                  <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-800">
+                  <div className="mt-4 rounded-lg border border-line bg-sky p-4 text-sm text-ink">
                     <p>File: {upload.original_filename ?? "Uploaded file"}</p>
                     <p className="mt-1">Size: {formatBytes(upload.size_bytes)}</p>
                     <p className="mt-1">Saved status: {upload.status}</p>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4">
-                    <p className="text-sm text-zinc-700">Upload will be enabled in the next step</p>
+                  <div className="mt-4 rounded-lg border border-dashed border-royal/40 bg-sky/60 p-4">
+                    <p className="text-sm font-medium text-navy">Upload will be enabled in the next step</p>
                     <button
                       type="button"
                       disabled
-                      className="mt-3 inline-flex min-h-11 items-center rounded-md bg-zinc-200 px-4 text-sm font-medium text-zinc-500"
+                      className="mt-3 inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
                     >
                       Upload
                     </button>
@@ -129,11 +133,11 @@ async function Checklist({ params }: { params: Promise<{ id: string }> }) {
         <button
           type="button"
           disabled
-          className="inline-flex min-h-11 items-center rounded-md bg-zinc-200 px-4 text-sm font-medium text-zinc-500"
+          className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
         >
           Run readiness check
         </button>
-        <p className="mt-2 text-sm text-zinc-600">Available after you upload your documents</p>
+        <p className="mt-2 text-sm text-muted">Available after you upload your documents</p>
       </div>
     </>
   );

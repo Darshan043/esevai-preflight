@@ -65,9 +65,11 @@ export function SignupForm() {
   }
 
   return (
-    <form onSubmit={(event) => void onSubmit(event)} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-zinc-900">Sign up</h1>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="full-name">
+    <form onSubmit={(event) => void onSubmit(event)} className="panel">
+      <p className="text-sm font-semibold text-royal">Account</p>
+      <h1 className="mt-1 text-2xl font-semibold text-navy">Sign up</h1>
+      <p className="mt-2 text-sm text-muted">Create a citizen account. New accounts are not admin accounts.</p>
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="full-name">
         Full name
         <input
           id="full-name"
@@ -75,10 +77,10 @@ export function SignupForm() {
           autoComplete="name"
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="email">
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="email">
         Email
         <input
           id="email"
@@ -86,10 +88,10 @@ export function SignupForm() {
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="password">
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="password">
         Password
         <input
           id="password"
@@ -97,10 +99,10 @@ export function SignupForm() {
           autoComplete="new-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      <label className="mt-4 block text-sm font-medium text-zinc-800" htmlFor="confirm-password">
+      <label className="mt-4 block text-sm font-medium text-navy" htmlFor="confirm-password">
         Confirm password
         <input
           id="confirm-password"
@@ -108,16 +110,12 @@ export function SignupForm() {
           autoComplete="new-password"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+          className="field"
         />
       </label>
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      {info ? <p className="mt-4 text-sm text-zinc-700">{info}</p> : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-6 rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-60"
-      >
+      {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+      {info ? <p className="mt-4 text-sm text-ink">{info}</p> : null}
+      <button type="submit" disabled={pending} className="btn-primary mt-6 w-full">
         {pending ? "Creating account..." : "Sign up"}
       </button>
     </form>

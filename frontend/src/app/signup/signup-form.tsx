@@ -56,7 +56,9 @@ export function SignupForm() {
 
     // Email confirmation is on when Supabase creates the user but does not return a session.
     if (!data.session) {
-      setInfo("Check your email to confirm the account, then log in.");
+      setInfo(
+        "Account created. Open the confirmation link in your email before you log in. Login will not accept this password until that link is opened.",
+      );
       return;
     }
 

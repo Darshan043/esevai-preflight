@@ -38,6 +38,13 @@ export function LoginForm() {
     setPending(false);
 
     if (signInError) {
+      const code = "code" in signInError ? String(signInError.code) : "";
+      const detail = signInError.message.toLowerCase();
+      // Supabase keeps this separate from a wrong password. The account exists but is not confirmed yet.
+      if (code === "email_not_confirmed" || detail.includes("email not confirmed")) {
+        setError("Confirm your email before you log in. Open the confirmation link in your inbox, then try again.");
+        return;
+      }
       // One message for a wrong email and a wrong password, so the form does not reveal which one.
       setError("Email or password is incorrect.");
       return;

@@ -52,6 +52,8 @@ export type PublicUpload = {
   mime_type: string | null;
   size_bytes: number | null;
   status: "uploaded" | "processing" | "processed" | "failed";
+  quality_metrics?: Record<string, unknown>;
+  ocr_text_masked?: string | null;
   created_at: string;
   updated_at: string;
 };

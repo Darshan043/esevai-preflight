@@ -22,6 +22,21 @@ class Settings(BaseSettings):
     # Largest upload this API will accept, in megabytes. A checklist item can be smaller.
     MAX_UPLOAD_MB: int = 5
 
+    # Optional full path to tesseract.exe. Empty means "use the system PATH".
+    TESSERACT_CMD: str = ""
+    # Optional folder that contains pdftoppm.exe. Empty means "use the system PATH".
+    POPPLER_PATH: str = ""
+    # Tesseract language codes. eng+tam reads English and Tamil in one pass.
+    OCR_LANGS: str = "eng+tam"
+    # Stop one OCR call if it runs longer than this many seconds.
+    OCR_TIMEOUT_SECONDS: int = 40
+    # Dots per inch used when a PDF page is turned into an image.
+    OCR_PDF_DPI: int = 200
+    # Only the first this-many PDF pages are read. The real page count is still recorded.
+    OCR_MAX_PDF_PAGES: int = 2
+    # Refuse an image with more pixels than this. Also sets Pillow's bomb limit.
+    OCR_MAX_PIXELS: int = 25000000
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

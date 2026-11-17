@@ -37,3 +37,13 @@ With the virtual environment activated, from the `backend` folder:
 ```powershell
 pytest
 ```
+
+## Read one local file
+
+This does not use the database. It prints quality numbers and the masked text only.
+
+```powershell
+python scripts/ocr_demo.py C:\path\to\document.jpg
+```
+
+JPG, PNG, and PDF files are accepted. Set `TESSERACT_CMD` or `POPPLER_PATH` in `.env` when those tools are not on the system PATH.

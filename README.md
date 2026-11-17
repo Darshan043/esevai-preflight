@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 6 complete – file upload and storage
+Step 7 complete – image processing and OCR
 
 ## Authentication
 
@@ -53,6 +53,23 @@ Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SE
 A citizen uploads one file per checklist slot. The backend accepts JPG, JPEG, PNG, and PDF only. The size limit is the smaller of that slot's `max_size_mb` and `MAX_UPLOAD_MB` (default 5 MB). The private Storage path is `{user_id}/{application_id}/{required_document_code}-{8-char-random}-{sanitized_filename}`.
 
 Only the owner can upload, preview, replace, or delete a file. An admin cannot open another person's files. Preview uses a new signed URL that lasts 300 seconds. The browser asks for a fresh link on every Preview click and does not save it.
+
+## OCR
+
+After a file is stored, the backend reads it on the server. It records sharpness (Laplacian variance), brightness, contrast, tilt, page count, and OCR confidence. Tesseract reads English and Tamil (`eng+tam`). Poppler turns the first PDF pages into images.
+
+Optional environment variables: `TESSERACT_CMD`, `POPPLER_PATH`, `OCR_LANGS` (default `eng+tam`), and `OCR_TIMEOUT_SECONDS` (default 40). `OCR_PDF_DPI`, `OCR_MAX_PDF_PAGES`, and `OCR_MAX_PIXELS` are in `backend/.env.example`.
+
+Only masked text is stored. A 12-digit or 16-digit ID number is saved as `XXXX XXXX 1234` or `XXXX XXXX XXXX 1234`. The raw OCR text is not written to the database, logs, or API responses.
+
+Step 14 must include Tesseract with `eng` and `tam` trained data, and Poppler, in the Docker image.
+
+Try one local file without the database:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\ocr_demo.py C:\path\to\document.jpg
+```
 
 ## Database
 

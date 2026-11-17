@@ -2,6 +2,7 @@
 
 // One checklist slot: choose a file, upload it, then preview, replace, or delete it.
 
+import { LoaderCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +13,7 @@ import {
   deleteUploadedDocument,
   fetchPreviewUrl,
   isPublicUpload,
+  processDocument,
   uploadUrl,
 } from "@/lib/api";
 import { slotStatus } from "@/lib/slot-status";
@@ -48,6 +50,63 @@ function formatWhen(value: string | null): string {
   return value.replace("T", " ").slice(0, 16);
 }
 
+function asMetrics(value: unknown, fallback: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return fallback ?? {};
+}
+
+function metricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
+  const value = metrics?.[key];
+  return typeof value === "number" ? value : null;
+}
+
+function metricText(value: number | null, digits = 0): string {
+  if (value == null) {
+    return "Not available";
+  }
+  return value.toFixed(digits);
+}
+
+function QualityPanel({ metrics, text }: { metrics: Record<string, unknown>; text: string | null }) {
+  const width = metricNumber(metrics, "width");
+  const height = metricNumber(metrics, "height");
+  const confidence = metricNumber(metrics, "ocr_mean_confidence");
+  const resolution = width != null && height != null ? `${width} x ${height}` : "Not available";
+  const rows = [
+    ["Sharpness", metricText(metricNumber(metrics, "blur_score"), 1)],
+    ["Brightness", metricText(metricNumber(metrics, "brightness_mean"), 0)],
+    ["Resolution", resolution],
+    ["Tilt", metricNumber(metrics, "skew_angle_degrees") == null ? "Not available" : `${metricText(metricNumber(metrics, "skew_angle_degrees"), 1)} degrees`],
+    ["Pages", metricText(metricNumber(metrics, "page_count"), 0)],
+    ["OCR confidence", confidence == null ? "Not available" : `${Math.round(confidence)}%`],
+  ];
+
+  return (
+    <section className="mt-4 rounded-lg border border-line bg-white p-4" aria-label="Quality indicators">
+      <h3 className="text-sm font-semibold text-navy">Quality indicators</h3>
+      <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-muted">{label}</dt>
+            <dd className="font-medium text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <details className="mt-3">
+        <summary className="min-h-11 cursor-pointer text-sm font-medium text-royal">
+          Show text read from this document (ID numbers are hidden)
+        </summary>
+        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-line bg-sky p-3 text-sm text-ink [font-family:ui-monospace,var(--font-tamil),monospace]">
+          {text?.trim() ? text : "No text was read."}
+        </pre>
+      </details>
+      <p className="mt-2 text-sm text-muted">Final checks come in the next step.</p>
+    </section>
+  );
+}
+
 async function accessToken(): Promise<string | null> {
   const supabase = createClient();
   const { data } = await supabase.auth.getSession();
@@ -78,8 +137,17 @@ export function UploadSlot({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [removedId, setRemovedId] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [processError, setProcessError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const ignoreRef = useRef(false);
+  const beforeRead = useRef<PublicUpload | null>(null);
   const shown = upload && upload.id !== removedId ? upload : null;
-  const status = slotStatus(shown, results);
+  const status = reading ? "Processing" : slotStatus(shown, results);
+  const waiting = reading || shown?.status === "processing";
+  const savedError =
+    shown?.status === "failed" && typeof shown.quality_metrics?.error === "string" ? shown.quality_metrics.error : null;
+  const visibleError = processError || savedError;
 
   function goToLogin() {
     router.push(`/login?next=/applications/${applicationId}`);
@@ -169,8 +237,73 @@ export function UploadSlot({
       onChange(parsed);
       setPendingFile(null);
       setMessage(null);
+      void readDocument(parsed);
     };
     xhr.send(body);
+  }
+
+  async function readDocument(current: PublicUpload) {
+    const token = await accessToken();
+    if (!token) {
+      goToLogin();
+      return;
+    }
+    ignoreRef.current = false;
+    beforeRead.current = current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setReading(true);
+    setProcessError(null);
+    setMessage(null);
+    onChange({ ...current, status: "processing" });
+    try {
+      const result = await processDocument(current.id, token, controller.signal);
+      if (ignoreRef.current) {
+        return;
+      }
+      onChange({
+        ...current,
+        status: result.status,
+        updated_at: result.updated_at || current.updated_at,
+        quality_metrics: result.quality_metrics ?? {},
+        ocr_text_masked: result.ocr_text_masked,
+      });
+      setProcessError(null);
+    } catch (caught) {
+      if (ignoreRef.current || (caught instanceof DOMException && caught.name === "AbortError")) {
+        return;
+      }
+      if (caught instanceof ApiError && caught.status === 401) {
+        goToLogin();
+        return;
+      }
+      const body = caught instanceof ApiError ? caught.body : null;
+      const failedStatus = body && typeof body.status === "string" ? body.status : "";
+      if (failedStatus === "uploaded" || failedStatus === "processing" || failedStatus === "processed" || failedStatus === "failed") {
+        onChange({
+          ...current,
+          status: failedStatus,
+          updated_at: typeof body?.updated_at === "string" ? body.updated_at : current.updated_at,
+          quality_metrics: asMetrics(body?.quality_metrics, current.quality_metrics),
+          ocr_text_masked: typeof body?.ocr_text_masked === "string" ? body.ocr_text_masked : null,
+        });
+      }
+      setProcessError(caught instanceof Error ? caught.message : NETWORK_ERROR);
+    } finally {
+      if (abortRef.current === controller) {
+        setReading(false);
+      }
+    }
+  }
+
+  function ignoreReading() {
+    ignoreRef.current = true;
+    abortRef.current?.abort();
+    setReading(false);
+    if (beforeRead.current) {
+      onChange(beforeRead.current);
+    }
   }
 
   async function preview() {
@@ -230,7 +363,7 @@ export function UploadSlot({
 
   return (
     <div className="mt-4">
-      <div className="mb-3">
+      <div className="mb-3" aria-live="polite">
         <StatusBadge status={status} />
       </div>
       {shown ? (
@@ -247,7 +380,7 @@ export function UploadSlot({
               className="btn-secondary"
               onClick={() => inputRef.current?.click()}
               aria-label={`Replace ${document.name}`}
-              disabled={deleting}
+              disabled={deleting || waiting}
             >
               Replace
             </button>
@@ -255,9 +388,17 @@ export function UploadSlot({
               type="button"
               className="btn-secondary border-red-200 text-red-800"
               onClick={() => setConfirmingDelete(true)}
-              disabled={deleting}
+              disabled={deleting || waiting}
             >
               Delete
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => void readDocument(shown)}
+              disabled={waiting}
+            >
+              Re-read document
             </button>
           </div>
           {confirmingDelete ? (
@@ -345,6 +486,19 @@ export function UploadSlot({
           </button>
         </div>
       ) : null}
+      {waiting ? (
+        <div className="mt-3" role="status" aria-live="polite">
+          <p className="flex items-center gap-2 text-sm text-ink">
+            <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-royal" />
+            Reading your document… This can take up to about 30 seconds.
+          </p>
+          {reading ? (
+            <button type="button" className="btn-secondary mt-3" onClick={ignoreReading}>
+              Cancel
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {message ? (
         <div className="mt-3" role="alert">
           <p className="text-sm text-red-800">{message}</p>
@@ -354,6 +508,19 @@ export function UploadSlot({
             </button>
           ) : null}
         </div>
+      ) : null}
+      {visibleError ? (
+        <div className="mt-3" role="alert">
+          <p className="text-sm text-red-800">{visibleError}</p>
+          {shown ? (
+            <button type="button" className="btn-secondary mt-2" onClick={() => void readDocument(shown)} disabled={waiting}>
+              Try again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {shown && shown.status === "processed" && !waiting ? (
+        <QualityPanel metrics={shown.quality_metrics ?? {}} text={shown.ocr_text_masked ?? null} />
       ) : null}
       {previewUrl ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/70 p-4" role="dialog" aria-modal="true" aria-label="Document preview">

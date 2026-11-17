@@ -2,6 +2,14 @@
 
 import type { PreviewLink, PublicUpload } from "@/lib/types";
 
+export type DocumentResult = {
+  id: string;
+  status: PublicUpload["status"];
+  quality_metrics: Record<string, unknown>;
+  ocr_text_masked: string | null;
+  updated_at: string;
+};
+
 export type HealthResponse = {
   status: string;
   service: string;
@@ -29,10 +37,12 @@ export type AdminPingResponse = {
 
 export class ApiError extends Error {
   status: number;
+  body: Record<string, unknown> | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: Record<string, unknown> | null = null) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -84,7 +94,10 @@ async function authRequest(path: string, accessToken: string, init: RequestInit)
         ...(init.headers ?? {}),
       },
     });
-  } catch {
+  } catch (caught) {
+    if (caught instanceof DOMException && caught.name === "AbortError") {
+      throw caught;
+    }
     throw new Error(NETWORK_ERROR);
   }
 }
@@ -124,6 +137,60 @@ export async function deleteUploadedDocument(documentId: string, accessToken: st
   if (!response.ok) {
     throw new ApiError(response.status, await readError(response));
   }
+}
+
+async function readBody(response: Response): Promise<Record<string, unknown>> {
+  try {
+    const body = (await response.json()) as unknown;
+    if (body && typeof body === "object") {
+      return body as Record<string, unknown>;
+    }
+  } catch {
+    // The body was not JSON.
+  }
+  return {};
+}
+
+function isDocumentResult(value: Record<string, unknown>): value is DocumentResult {
+  return typeof value.id === "string" && typeof value.status === "string";
+}
+
+async function readDocumentResult(response: Response): Promise<DocumentResult> {
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  if (!isDocumentResult(body)) {
+    throw new Error("The server response could not be read.");
+  }
+  return {
+    id: body.id,
+    status: body.status,
+    quality_metrics: body.quality_metrics && typeof body.quality_metrics === "object" ? body.quality_metrics : {},
+    ocr_text_masked: typeof body.ocr_text_masked === "string" ? body.ocr_text_masked : null,
+    updated_at: typeof body.updated_at === "string" ? body.updated_at : "",
+  };
+}
+
+export async function processDocument(
+  documentId: string,
+  accessToken: string,
+  signal?: AbortSignal,
+): Promise<DocumentResult> {
+  const response = await authRequest(`/documents/${documentId}/process`, accessToken, {
+    method: "POST",
+    signal,
+  });
+  return readDocumentResult(response);
+}
+
+export async function fetchDocumentResult(documentId: string, accessToken: string): Promise<DocumentResult> {
+  const response = await authRequest(`/documents/${documentId}/result`, accessToken, { method: "GET" });
+  return readDocumentResult(response);
 }
 
 export async function deleteApplicationOnServer(applicationId: string, accessToken: string): Promise<void> {

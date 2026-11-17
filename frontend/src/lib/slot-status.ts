@@ -1,6 +1,13 @@
 import type { UploadedDocument, ValidationResult } from "@/lib/types";
 
-export type SlotStatus = "Pending" | "Uploaded" | "Processing" | "Passed" | "Needs fix" | "Failed";
+export type SlotStatus =
+  | "Pending"
+  | "Uploaded"
+  | "Processing"
+  | "Processed"
+  | "Passed"
+  | "Needs fix"
+  | "Failed";
 
 // Turns one checklist row plus its saved file into a label the citizen can read.
 export function slotStatus(
@@ -20,8 +27,11 @@ export function slotStatus(
     return "Failed";
   }
 
-  const failed = results.some(
-    (result) => result.uploaded_document_id === upload.id && result.status === "fail",
-  );
+  // "Passed" and "Needs fix" wait for Step 8. Until then a finished read is only "Processed".
+  const own = results.filter((result) => result.uploaded_document_id === upload.id);
+  if (own.length === 0) {
+    return "Processed";
+  }
+  const failed = own.some((result) => result.status === "fail");
   return failed ? "Needs fix" : "Passed";
 }

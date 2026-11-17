@@ -176,6 +176,18 @@ def upload_object(path: str, content_bytes: bytes, content_type: str) -> None:
     _raise_for_status(response, service_key)
 
 
+def download_object(path: str) -> bytes:
+    """Read one private file. Headers and the path are not logged."""
+    base_url, service_key = _settings()
+    headers = _headers(service_key)
+    url = f"{base_url}/storage/v1/object/{DOCUMENTS_BUCKET}/{_object_path(path)}"
+    response = _send("GET", url, headers)
+    if response.status_code == 404:
+        raise SupabaseRequestError("The stored file could not be found.")
+    _raise_for_status(response, service_key)
+    return response.content
+
+
 def delete_objects(paths: list[str]) -> None:
     """Delete storage objects. A path that is already gone is ignored."""
     cleaned = [path for path in paths if path]

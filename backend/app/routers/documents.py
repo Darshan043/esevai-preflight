@@ -1,26 +1,36 @@
-"""Store, preview, replace, and delete a citizen's checklist files.
+"""Store, preview, replace, delete, and read a citizen's checklist files.
 
 The service-role key bypasses row-level security, so every route checks that
 the application's user_id is the caller. Someone else's row answers 404.
+OCR text is masked before it is saved and is never written to the log.
 """
 
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse, Response
 
 from app.auth import CurrentUser, get_current_user
 from app.file_checks import allowed_bytes, read_upload, storage_path
+from app.processing.loader import DocumentUnreadableError
+from app.processing.masking import mask_sensitive
+from app.processing.pipeline import process_document
 from app.supabase_client import (
     SupabaseRequestError,
     create_signed_url,
     delete_objects,
     delete_rows,
+    download_object,
     get_rows,
     insert_row,
     update_rows,
     upload_object,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -45,6 +55,8 @@ def public_document(row: dict[str, Any]) -> dict[str, Any]:
         "mime_type": row.get("mime_type"),
         "size_bytes": row.get("size_bytes"),
         "status": row.get("status"),
+        "quality_metrics": row.get("quality_metrics") or {},
+        "ocr_text_masked": row.get("ocr_text_masked"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
@@ -101,7 +113,7 @@ def _owned_upload(document_id: str, user_id: str) -> dict[str, Any]:
         {
             "id": f"eq.{document_id}",
             "user_id": f"eq.{user_id}",
-            "select": "id,application_id,user_id,storage_path,mime_type,required_document_id,original_filename,size_bytes,status,created_at,updated_at",
+            "select": "id,application_id,user_id,storage_path,mime_type,required_document_id,original_filename,size_bytes,status,quality_metrics,ocr_text_masked,created_at,updated_at",
             "limit": "1",
         },
     )
@@ -302,3 +314,147 @@ def delete_application(
     except SupabaseRequestError as exc:
         raise HTTPException(status_code=502, detail="The application could not be deleted.") from exc
     return Response(status_code=204, headers={"content-length": "0"})
+
+
+def _result_body(row: dict[str, Any]) -> dict[str, Any]:
+    """Fields the browser may see after a read. The storage path stays on the server."""
+    metrics = row.get("quality_metrics") or {}
+    if not isinstance(metrics, dict):
+        metrics = {}
+    text = row.get("ocr_text_masked")
+    if text is not None and not isinstance(text, str):
+        text = None
+    return {
+        "id": row.get("id"),
+        "status": row.get("status"),
+        "quality_metrics": metrics,
+        "ocr_text_masked": text,
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _fresh_processing(row: dict[str, Any]) -> bool:
+    """True when a read started less than two minutes ago and should not be restarted."""
+    if row.get("status") != "processing":
+        return False
+    raw = str(row.get("updated_at") or "")
+    if not raw:
+        return False
+    try:
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - stamp < timedelta(minutes=2)
+
+
+def _friendly_error(exc: Exception) -> str:
+    """A short message for the citizen. It never includes the words that were read."""
+    if isinstance(exc, DocumentUnreadableError):
+        return str(exc)[:180]
+    if isinstance(exc, SupabaseRequestError):
+        return "The stored file could not be read. Please try again."
+    return "We could not read this document. Please try a clearer photo."
+
+
+def _save_failure(row: dict[str, Any], message: str) -> dict[str, Any]:
+    failed = {
+        "status": "failed",
+        "quality_metrics": {"error": message},
+        "ocr_text_masked": None,
+    }
+    try:
+        updated = update_rows("uploaded_documents", {"id": f"eq.{row['id']}"}, failed)
+    except SupabaseRequestError:
+        updated = []
+    if updated:
+        return updated[0]
+    merged = dict(row)
+    merged.update(failed)
+    return merged
+
+
+def _download_and_process(path: str, mime_type: str) -> dict[str, object]:
+    """Download and read away from the request loop. The path is not logged."""
+    content = download_object(path)
+    return process_document(content, mime_type)
+
+
+@router.post("/documents/{document_id}/process")
+async def process_upload(
+    document_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Read one of the caller's files and store masked text plus quality numbers."""
+    row = _owned_upload(document_id, user.user_id)
+    if _fresh_processing(row):
+        raise HTTPException(status_code=409, detail="Already processing")
+
+    path = str(row.get("storage_path") or "")
+    mime_type = str(row.get("mime_type") or "")
+    try:
+        marked = update_rows("uploaded_documents", {"id": f"eq.{row['id']}"}, {"status": "processing"})
+    except SupabaseRequestError as exc:
+        raise HTTPException(status_code=502, detail="The file could not be read. Please try again.") from exc
+    if marked:
+        row = marked[0]
+    if not path:
+        message = "The stored file could not be found."
+        failed = _save_failure(row, message)
+        body = _result_body(failed)
+        return JSONResponse(status_code=422, content={"detail": message, **body})
+
+    started = datetime.now(timezone.utc)
+    try:
+        outcome = await run_in_threadpool(_download_and_process, path, mime_type)
+    except Exception as exc:
+        message = _friendly_error(exc)
+        failed = _save_failure(row, message)
+        logger.info("ocr failed document=%s error_type=%s", document_id, type(exc).__name__)
+        body = _result_body(failed)
+        return JSONResponse(status_code=422, content={"detail": message, **body})
+
+    raw_text = outcome.get("ocr_text_masked")
+    masked_text, _count = mask_sensitive(raw_text if isinstance(raw_text, str) else "")
+    if len(masked_text) > 20000:
+        masked_text = masked_text[:20000]
+    metrics = outcome.get("quality_metrics")
+    if not isinstance(metrics, dict):
+        metrics = {}
+    try:
+        updated = update_rows(
+            "uploaded_documents",
+            {"id": f"eq.{row['id']}"},
+            {
+                "status": "processed",
+                "quality_metrics": metrics,
+                "ocr_text_masked": masked_text,
+                "extracted_fields": {},
+            },
+        )
+    except SupabaseRequestError as exc:
+        message = "The reading finished but could not be saved. Please try again."
+        failed = _save_failure(row, message)
+        body = _result_body(failed)
+        return JSONResponse(status_code=422, content={"detail": message, **body})
+
+    saved = updated[0] if updated else {
+        **row,
+        "status": "processed",
+        "quality_metrics": metrics,
+        "ocr_text_masked": masked_text,
+    }
+    elapsed_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+    logger.info("ocr finished document=%s status=processed ms=%s", document_id, elapsed_ms)
+    return JSONResponse(status_code=200, content=_result_body(saved))
+
+
+@router.get("/documents/{document_id}/result")
+def document_result(
+    document_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return the saved reading for a file the caller owns."""
+    row = _owned_upload(document_id, user.user_id)
+    return _result_body(row)

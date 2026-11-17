@@ -26,6 +26,8 @@ function publicUpload(upload: {
   mime_type: string | null;
   size_bytes: number | null;
   status: PublicUpload["status"];
+  quality_metrics: Record<string, unknown> | null;
+  ocr_text_masked: string | null;
   created_at: string;
   updated_at: string;
 }): PublicUpload {
@@ -36,6 +38,8 @@ function publicUpload(upload: {
     mime_type: upload.mime_type,
     size_bytes: upload.size_bytes,
     status: upload.status,
+    quality_metrics: upload.quality_metrics ?? {},
+    ocr_text_masked: upload.ocr_text_masked,
     created_at: upload.created_at,
     updated_at: upload.updated_at,
   };

@@ -275,6 +275,10 @@ def test_replace_uploads_new_and_removes_old(monkeypatch: object) -> None:
     assert store.validation_deleted
     assert response.json()["original_filename"] == "new.png"
     assert "storage_path" not in response.json()
+    assert store.row is not None
+    assert store.row["status"] == "uploaded"
+    assert store.row["quality_metrics"] == {}
+    assert store.row["ocr_text_masked"] is None
 
 
 def test_failed_insert_removes_the_new_object(monkeypatch: object) -> None:

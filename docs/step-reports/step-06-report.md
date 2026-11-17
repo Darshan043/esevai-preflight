@@ -44,27 +44,32 @@ GATE PASSED – Step 5 verified. No Step 5 fixes were required, so there is no "
 | Oversized files stop early | PASS | `read_upload` reads 64 KiB chunks and raises 413 as soon as the total passes the limit. The test with `MAX_UPLOAD_MB=0` does not call `upload_object`. | | |
 | No secrets or sample-docs committed | PASS | The Step 6 commit does not include `.env`, `.env.local`, `.venv`, `node_modules`, or `sample-docs`. Staged source has no secret-looking strings. | | |
 | Commit and push | PASS | `fed1070` "Step 6: file upload and storage – validated uploads, signed previews, replace and delete" is on `origin/main`. This report is the following commit. | | |
-| Tree clean | PASS | After the implementation commit, `git status` was clean. | | |
-| JPG uploads | PENDING-USER | Live Storage was not written during AI verification. | The owner runs the upload. | |
-| PNG uploads | PENDING-USER | Same as JPG. | The owner runs the upload. | |
-| PDF uploads | PENDING-USER | Same as JPG. | The owner runs the upload. | |
-| Text file renamed to .pdf is rejected | PENDING-USER | Covered by a mocked 415 test only. | The owner tries a real fake PDF. | |
-| .txt is rejected | PENDING-USER | Covered by a mocked 415 test only. | The owner tries a real .txt file. | |
-| File over 5 MB is rejected with a friendly message | PENDING-USER | Covered by a mocked 413 test and the client size check. | The owner tries a real large file. | |
-| Progress bar and Cancel work | PENDING-USER | The controls are in `UploadSlot`. | The owner watches a real upload. | |
-| Preview shows the image and opens the PDF | PENDING-USER | Preview requests a fresh signed URL each click. | The owner opens both kinds of file. | |
-| Replace swaps the file and the old object disappears | PENDING-USER | The mocked replace test deletes the old object. | The owner checks Storage. | |
-| Delete removes the file and row | PENDING-USER | The mocked delete test removes the object and the row. | The owner checks Storage and the table. | |
-| Progress counter updates | PENDING-USER | The counter uses local state after upload or delete. | The owner uploads and deletes without reloading. | |
-| File appears in Storage under `{user_id}/{application_id}/` | PENDING-USER | The path builder uses that shape. | The owner checks the bucket. | |
-| Row appears in `uploaded_documents` | PENDING-USER | Insert is mocked in tests. | The owner checks the table. | |
-| A second user cannot preview or delete the first user's document | PENDING-USER | The mocked other-user case returns 404. | The owner tries with a second account. | |
-| Deleting an application removes its files from Storage | PENDING-USER | The endpoint deletes storage objects before the row. My applications calls that endpoint. | The owner deletes an application and checks the bucket. | |
-| Phone-sized screen (camera or gallery) | PENDING-USER | The file input accepts `.jpg,.jpeg,.png,.pdf` and `image/*` and does not force the camera. | The owner tries a phone. | |
+| Tree clean | PASS | After the implementation commit, `git status` was clean. The finalize commits are recorded below. | | |
+| Delete response finishes in the browser | PASS | Delete and application delete return 204 with `Content-Length: 0`. The checklist hides the file only after that success. | | |
+| JPG uploads | PASS | The owner completed the live upload tests. | | |
+| PNG uploads | PASS | The owner completed the live upload tests. | | |
+| PDF uploads | PASS | The owner completed the live upload tests. | | |
+| Text file renamed to .pdf is rejected | PASS | The owner completed the live upload tests. | | |
+| .txt is rejected | PASS | The owner completed the live upload tests. | | |
+| File over 5 MB is rejected with a friendly message | PASS | The owner completed the live upload tests. | | |
+| Progress bar and Cancel work | PASS | The owner completed the live upload tests. | | |
+| Preview shows the image and opens the PDF | PASS | The owner completed the live upload tests. | | |
+| Replace swaps the file and the old object disappears | PASS | The owner completed the live upload tests. | | |
+| Delete removes the file and row | PASS | The owner completed the live upload tests, including the checklist delete fix. | | |
+| Progress counter updates | PASS | The owner completed the live upload tests. | | |
+| File appears in Storage under `{user_id}/{application_id}/` | PASS | The owner completed the live upload tests. | | |
+| Row appears in `uploaded_documents` | PASS | The owner completed the live upload tests. | | |
+| A second user cannot preview or delete the first user's document | PASS | The owner completed the live upload tests. | | |
+| Deleting an application removes its files from Storage | PASS | The owner confirmed application deletion removes the uploaded files from Supabase Storage. | | |
+| Phone-sized screen (camera or gallery) | PASS | The owner completed the live upload tests. | | |
 
 ## Verdict
 
-AI work: PASS; live upload tests: PENDING until the owner tests.
+AI work: PASS; live upload tests: PASS. The owner confirmed every manual Step 6 check, including application deletion and removal of its files from Storage.
+
+## Follow-up included in the finalize commits
+
+A successful document delete was leaving the file on the checklist. Commit `4a17485` sends `Content-Length: 0` on the 204 response, and the slot clears only after the delete succeeds.
 
 ## Manual test steps for the owner
 

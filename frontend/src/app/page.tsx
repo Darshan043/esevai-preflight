@@ -109,7 +109,7 @@ export default function Home() {
               </li>
               <li className="flex gap-3">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky text-xs font-semibold text-navy">3</span>
-                Upload and the readiness report open in a later step.
+                Upload your files, then generate a printable readiness report.
               </li>
             </ol>
           </aside>

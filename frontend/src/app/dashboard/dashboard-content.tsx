@@ -5,7 +5,8 @@ import { connection } from "next/server";
 import { BackendConnection } from "@/components/BackendConnection";
 import { Card } from "@/components/Card";
 import { SignOutButton } from "@/components/SignOutButton";
-import { countMyApplications } from "@/lib/catalog";
+import { countMyApplications, latestReadiness } from "@/lib/catalog";
+import { LABEL_COPY } from "@/lib/report";
 import { getUserAndProfile } from "@/lib/supabase/server";
 
 export async function DashboardContent() {
@@ -16,7 +17,7 @@ export async function DashboardContent() {
   if (!current) {
     redirect("/login?next=/dashboard");
   }
-  const applicationCount = await countMyApplications();
+  const [applicationCount, latest] = await Promise.all([countMyApplications(), latestReadiness()]);
 
   const name = current.profile?.full_name?.trim() || "there";
   const role = current.profile?.role ?? "citizen";
@@ -58,6 +59,13 @@ export async function DashboardContent() {
         <Card className="service-card">
           <h2 className="text-lg font-semibold text-navy">My applications</h2>
           <p className="mt-2 text-sm leading-6 text-muted">Open a document check you already started.</p>
+          {latest ? (
+            <p className="mt-2 text-sm text-ink">
+              Latest score {latest.score} · {LABEL_COPY[latest.label].title}
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-muted">No readiness report yet.</p>
+          )}
           <Link href="/applications" className="btn-primary mt-4">
             My applications
           </Link>

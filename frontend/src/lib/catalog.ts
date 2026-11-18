@@ -5,8 +5,10 @@ import { connection } from "next/server";
 
 import { LANGUAGE_COOKIE, parseLanguage, type Language } from "@/lib/language";
 import { createClient, getUserAndProfile } from "@/lib/supabase/server";
+import { isReadinessLabel } from "@/lib/report";
 import type {
   Application,
+  ReadinessLabel,
   RequiredDocument,
   Service,
   UploadedDocument,
@@ -27,6 +29,7 @@ export type ApplicationListItem = Pick<
   serviceName: { name_en: string; name_ta: string | null };
   uploadedCount: number;
   requiredCount: number;
+  label: ReadinessLabel | null;
 };
 
 async function client() {
@@ -144,7 +147,7 @@ export async function listMyApplications(): Promise<{
     const { data, error } = await supabase
       .from("applications")
       .select(
-        "id, status, readiness_score, created_at, services(name_en, name_ta, required_documents(id, is_active)), uploaded_documents(id, required_document_id)",
+        "id, status, readiness_score, created_at, summary, services(name_en, name_ta, required_documents(id, is_active)), uploaded_documents(id, required_document_id)",
       )
       .order("created_at", { ascending: false });
 
@@ -163,6 +166,7 @@ export async function listMyApplications(): Promise<{
         id: row.id,
         status: row.status,
         readiness_score: row.readiness_score,
+        label: labelFromSummary(row.summary),
         created_at: row.created_at,
         serviceName: {
           name_en: service?.name_en ?? "Service",
@@ -182,6 +186,37 @@ export async function countMyApplications(): Promise<number> {
   const supabase = await client();
   const { count } = await supabase.from("applications").select("id", { count: "exact", head: true });
   return count ?? 0;
+}
+
+export async function latestReadiness(): Promise<{ score: number; label: ReadinessLabel } | null> {
+  const supabase = await client();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("readiness_score, summary, updated_at")
+    .not("readiness_score", "is", null)
+    .eq("status", "checked")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data || typeof data.readiness_score !== "number") {
+    return null;
+  }
+  const label = labelFromSummary(data.summary);
+  if (!label) {
+    return { score: data.readiness_score, label: "not_ready" };
+  }
+  return { score: data.readiness_score, label };
+}
+
+function labelFromSummary(summary: unknown): ReadinessLabel | null {
+  if (!summary || typeof summary !== "object") {
+    return null;
+  }
+  const report = (summary as { report?: { label?: unknown } }).report;
+  if (!report || typeof report !== "object") {
+    return null;
+  }
+  return isReadinessLabel(report.label) ? report.label : null;
 }
 
 export type ChecklistData = {

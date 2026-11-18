@@ -34,6 +34,14 @@ class Store:
         self.application_deleted = False
         self.validation_deleted = False
         self.deleted_matches: list[tuple[str, dict[str, str]]] = []
+        self.application: dict[str, object] = {
+            "id": APP_ID,
+            "user_id": USER_ID,
+            "service_id": SERVICE_ID,
+            "status": "checked",
+            "readiness_score": 91,
+            "summary": {"report": {"score": 91, "label": "ready"}, "kept": True},
+        }
 
 
 def _install(monkeypatch: object, store: Store) -> None:
@@ -41,9 +49,11 @@ def _install(monkeypatch: object, store: Store) -> None:
 
     def get_rows(table: str, params: dict[str, str]) -> list[dict[str, object]]:
         if table == "applications":
-            if params.get("user_id") != f"eq.{USER_ID}" or params.get("id") != f"eq.{APP_ID}":
+            if params.get("id") != f"eq.{APP_ID}":
                 return []
-            return [{"id": APP_ID, "user_id": USER_ID, "service_id": SERVICE_ID}]
+            if "user_id" in params and params.get("user_id") != f"eq.{USER_ID}":
+                return []
+            return [dict(store.application)]
         if table == "required_documents":
             if params.get("id") != f"eq.{REQUIRED_ID}":
                 return []
@@ -97,7 +107,10 @@ def _install(monkeypatch: object, store: Store) -> None:
         return created
 
     def update_rows(table: str, match: dict[str, str], values: dict[str, object]) -> list[dict[str, object]]:
-        del table, match
+        del match
+        if table == "applications":
+            store.application.update(values)
+            return [dict(store.application)]
         if store.row is None:
             return []
         store.row.update(values)

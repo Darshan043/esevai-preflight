@@ -357,6 +357,14 @@ class Store:
         self.results: list[dict[str, object]] = []
         self.fail_insert = False
         self.uploads: list[dict[str, object]] = []
+        self.application: dict[str, object] = {
+            "id": APP_ID,
+            "user_id": USER_ID,
+            "service_id": SERVICE_ID,
+            "status": "draft",
+            "readiness_score": None,
+            "summary": {"kept": True},
+        }
         self.required: list[dict[str, object]] = [
             {
                 "id": "req-photo",
@@ -378,9 +386,11 @@ def _install(monkeypatch: object, store: Store) -> None:
 
     def get_rows(table: str, params: dict[str, str]) -> list[dict[str, object]]:
         if table == "applications":
-            if params.get("user_id") == f"eq.{USER_ID}" and params.get("id") == f"eq.{APP_ID}":
-                return [{"id": APP_ID, "user_id": USER_ID, "service_id": SERVICE_ID}]
-            return []
+            if params.get("id") != f"eq.{APP_ID}":
+                return []
+            if "user_id" in params and params.get("user_id") != f"eq.{USER_ID}":
+                return []
+            return [dict(store.application)]
         if table == "required_documents":
             return list(store.required)
         if table == "uploaded_documents":
@@ -409,9 +419,17 @@ def _install(monkeypatch: object, store: Store) -> None:
         if "application_id" in match and "id" not in match:
             store.results = []
 
+    def update_rows(table: str, match: dict[str, str], values: dict[str, object]) -> list[dict[str, object]]:
+        del match
+        if table == "applications":
+            store.application.update(values)
+            return [dict(store.application)]
+        return []
+
     monkeypatch.setattr("app.routers.validation.get_rows", get_rows)
     monkeypatch.setattr("app.routers.validation.insert_rows", insert_rows)
     monkeypatch.setattr("app.routers.validation.delete_rows", delete_rows)
+    monkeypatch.setattr("app.routers.validation.update_rows", update_rows)
 
 
 def test_validate_requires_a_token() -> None:

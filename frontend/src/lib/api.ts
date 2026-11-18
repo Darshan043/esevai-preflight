@@ -1,7 +1,7 @@
 // Talks to the FastAPI backend. The URL comes from the frontend env file.
 
 import type { AiAdvice } from "@/lib/ai";
-import type { PreviewLink, PublicUpload, ValidationResult } from "@/lib/types";
+import type { PreviewLink, PublicUpload, ReadinessReport, ReportPayload, ValidationResult } from "@/lib/types";
 
 export type DocumentResult = {
   id: string;
@@ -305,6 +305,48 @@ export async function validateApplication(applicationId: string, accessToken: st
 export async function fetchValidation(applicationId: string, accessToken: string): Promise<ValidationPayload> {
   const response = await authRequest(`/applications/${applicationId}/validation`, accessToken, { method: "GET" });
   return readValidation(response);
+}
+
+function isReadinessReport(value: unknown): value is ReadinessReport {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const row = value as Partial<ReadinessReport>;
+  return typeof row.score === "number" && typeof row.label === "string" && Array.isArray(row.next_steps);
+}
+
+async function readReportBody(response: Response): Promise<ReadinessReport> {
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  if (!isReadinessReport(body)) {
+    throw new Error("The server response could not be read.");
+  }
+  return body;
+}
+
+export async function generateReport(applicationId: string, accessToken: string): Promise<ReadinessReport> {
+  const response = await authRequest(`/applications/${applicationId}/report`, accessToken, { method: "POST" });
+  return readReportBody(response);
+}
+
+export async function fetchReport(applicationId: string, accessToken: string): Promise<ReportPayload> {
+  const response = await authRequest(`/applications/${applicationId}/report`, accessToken, { method: "GET" });
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  const report = isReadinessReport(body.report) ? body.report : null;
+  return { report, is_current: body.is_current === true && report !== null };
 }
 
 export async function deleteApplicationOnServer(applicationId: string, accessToken: string): Promise<void> {

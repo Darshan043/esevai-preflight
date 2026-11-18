@@ -19,7 +19,7 @@ async function HeaderWithLanguage() {
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-navy bg-white text-navy">
+    <header className="border-b border-navy bg-white text-navy print:hidden">
       <a href="#content" className="skip-link">
         Skip to content
       </a>

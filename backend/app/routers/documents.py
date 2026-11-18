@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, Response
 
 from app.ai.hygiene import clear_ai_advice
 from app.auth import CurrentUser, get_current_user
+from app.report.hygiene import clear_stale_report
 from app.file_checks import allowed_bytes, read_upload, storage_path
 from app.processing.loader import DocumentUnreadableError
 from app.processing.masking import mask_sensitive
@@ -55,6 +56,20 @@ def _clear_ai_advice(application_id: str) -> None:
         clear_ai_advice(application_id, reader=get_rows, writer=update_rows)
     except Exception as exc:
         logger.info("ai advice clear failed error_type=%s", type(exc).__name__)
+
+
+def _clear_stale_report(application_id: str) -> None:
+    """Drop the saved score after a file is uploaded, replaced, deleted, or re-read."""
+    try:
+        clear_stale_report(application_id, reader=get_rows, writer=update_rows)
+    except Exception as exc:
+        logger.info("report clear failed error_type=%s", type(exc).__name__)
+
+
+def _after_document_change(application_id: str) -> None:
+    """AI advice and the printable report both go stale when the files change."""
+    _clear_ai_advice(application_id)
+    _clear_stale_report(application_id)
 
 
 def _clear_saved_checks(application_id: str, document_id: str) -> None:
@@ -234,7 +249,7 @@ async def upload_document(
             except SupabaseRequestError as exc:
                 delete_objects([path])
                 raise _storage_failed() from exc
-            _clear_ai_advice(application_id)
+            _after_document_change(application_id)
             return public_document(created)
 
         old_path = str(existing.get("storage_path") or "")
@@ -266,7 +281,7 @@ async def upload_document(
                 if _restore_path(str(existing["id"]), old_path):
                     delete_objects([path])
                 raise _storage_failed() from exc
-        _clear_ai_advice(application_id)
+        _after_document_change(application_id)
         return public_document(updated[0])
     finally:
         await file.close()
@@ -313,7 +328,7 @@ def delete_document(
 ) -> Response:
     """Remove one file, its check results, and its storage object."""
     document = _owned_upload(document_id, user.user_id)
-    _clear_ai_advice(str(document.get("application_id") or ""))
+    _after_document_change(str(document.get("application_id") or ""))
     path = str(document.get("storage_path") or "")
     try:
         if path:
@@ -438,7 +453,7 @@ async def process_upload(
     if not path:
         message = "The stored file could not be found."
         failed = _save_failure(row, message)
-        _clear_ai_advice(str(row.get("application_id") or ""))
+        _after_document_change(str(row.get("application_id") or ""))
         body = _result_body(failed)
         return JSONResponse(status_code=422, content={"detail": message, **body})
 
@@ -449,7 +464,7 @@ async def process_upload(
         message = _friendly_error(exc)
         failed = _save_failure(row, message)
         _clear_saved_checks(str(row.get("application_id") or ""), document_id)
-        _clear_ai_advice(str(row.get("application_id") or ""))
+        _after_document_change(str(row.get("application_id") or ""))
         logger.info("ocr failed document=%s error_type=%s", document_id, type(exc).__name__)
         body = _result_body(failed)
         return JSONResponse(status_code=422, content={"detail": message, **body})
@@ -475,7 +490,7 @@ async def process_upload(
     except SupabaseRequestError as exc:
         message = "The reading finished but could not be saved. Please try again."
         failed = _save_failure(row, message)
-        _clear_ai_advice(str(row.get("application_id") or ""))
+        _after_document_change(str(row.get("application_id") or ""))
         body = _result_body(failed)
         return JSONResponse(status_code=422, content={"detail": message, **body})
 
@@ -486,7 +501,7 @@ async def process_upload(
         "ocr_text_masked": masked_text,
     }
     _clear_saved_checks(str(saved.get("application_id") or row.get("application_id") or ""), document_id)
-    _clear_ai_advice(str(saved.get("application_id") or row.get("application_id") or ""))
+    _after_document_change(str(saved.get("application_id") or row.get("application_id") or ""))
     elapsed_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
     logger.info("ocr finished document=%s status=processed ms=%s", document_id, elapsed_ms)
     return JSONResponse(status_code=200, content=_result_body(saved))

@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 9 complete – AI integration. The live model is set with `GEMINI_MODEL` (currently `gemini-3.5-flash-lite`). The application checklist uses a two-column workspace; browser verification of that layout is still pending.
+Step 10 complete – readiness report. The saved checks become a score, a Ready / Almost ready / Not ready label, a “what to do next” list, and a printable report page. AI explanations never change the score.
 
 ## Authentication
 
@@ -41,6 +41,7 @@ Next.js `src/proxy.ts` refreshes the session and sends visitors who are not sign
 | `/dashboard` | Protected |
 | `/applications` | Protected |
 | `/applications/[id]` | Protected, owner only |
+| `/applications/[id]/report` | Protected, owner only |
 | `/admin` | Protected, admin only |
 
 The FastAPI backend checks the access token on `GET /me` and `GET /admin/ping`. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page.
@@ -87,7 +88,7 @@ Checks:
 
 If a rule key is missing, the defaults are: blur below 100 fails, a blank page fails, a small photo warns, brightness outside 40–220 warns, OCR confidence below 40 warns, and tilt above 15 degrees warns.
 
-Name and date reading uses a trusted Gemini extraction when one is saved. Otherwise it stays a best guess from labels and simple patterns. Gemini never changes a pass or fail result. The readiness score and report are Step 10.
+Name and date reading uses a trusted Gemini extraction when one is saved. Otherwise it stays a best guess from labels and simple patterns. Gemini never changes a pass or fail result. The readiness score is a separate calculation over those results (see [Report](#report)).
 
 `POST /applications/{id}/validate` replaces saved results. `GET /applications/{id}/validation` reads them. Both require the owner.
 
@@ -113,9 +114,17 @@ Unknown extra keys on an extraction JSON object are ignored. Known fields stay s
 On `/applications/[id]`, from the `lg` breakpoint:
 
 - Left: the five document cards (upload, replace, delete, re-read, quality, OCR text, AI-extracted details).
-- Right: a sticky readiness panel with the full checklist, passed and failed checks, Re-run checks, Explain issues in simple words, and AI advice.
+- Right: a sticky readiness panel with the full checklist, passed and failed checks, Re-run checks, Explain issues in simple words, and Generate readiness report.
 
 Below that breakpoint the page is a single column, with the results panel first. The same validation state and API calls are reused. Browser verification of this layout is still pending.
+
+## Report
+
+`POST /applications/{id}/report` re-runs the checklist checks, scores them with a fixed formula, and saves `readiness_score`, `status = checked`, and `summary.report`. `GET /applications/{id}/report` returns that object plus `is_current` (false when a file changed after the report time).
+
+The report holds service and document display names, check messages, fix suggestions, counts, the score, the label, next steps, and the carry list. It does not hold OCR text, holder names, ID numbers, storage paths, or emails. The formula and two worked examples are in [docs/readiness-scoring.md](docs/readiness-scoring.md).
+
+Open `/applications/[id]/report` to see the score, what to do next, each document, and the carry list. **Print / Save as PDF** uses the browser print dialog (`window.print()`). There is no server-side PDF export in this step. Replacing or deleting a file returns the application to draft and clears the saved report.
 
 ## Database
 

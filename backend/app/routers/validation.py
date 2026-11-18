@@ -31,7 +31,7 @@ def _owned_application(application_id: str, user_id: str) -> dict[str, Any]:
         {
             "id": f"eq.{application_id}",
             "user_id": f"eq.{user_id}",
-            "select": "id,user_id,service_id",
+            "select": "id,user_id,service_id,status,readiness_score,summary",
             "limit": "1",
         },
     )
@@ -71,7 +71,7 @@ def _load_inputs(application: dict[str, Any], user_id: str) -> tuple[list[dict[s
         {
             "service_id": f"eq.{application['service_id']}",
             "is_active": "eq.true",
-            "select": "id,code,name_en,is_mandatory,is_active,keywords,required_fields,rules,validity_days,sort_order",
+            "select": "id,code,name_en,name_ta,is_mandatory,is_active,keywords,required_fields,rules,validity_days,sort_order",
             "order": "sort_order.asc",
         },
     )
@@ -140,11 +140,10 @@ def _store_results(application_id: str, results: list[Result]) -> list[dict[str,
     return inserted
 
 
-@router.post("/applications/{application_id}/validate")
-def validate(application_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
-    """Replace this application's check results. Does not score the application."""
-    application = _owned_application(application_id, user.user_id)
-    required, documents = _load_inputs(application, user.user_id)
+def run_and_store_validation(application_id: str, user_id: str) -> dict[str, Any]:
+    """Run the checklist engine and replace saved rows. Used by validate and report."""
+    application = _owned_application(application_id, user_id)
+    required, documents = _load_inputs(application, user_id)
     results = validate_application(required, documents)
     saved = _store_results(application_id, results)
     try:
@@ -159,7 +158,24 @@ def validate(application_id: str, user: CurrentUser = Depends(get_current_user))
         sum(1 for row in public if row.get("status") == "warning"),
         sum(1 for row in public if row.get("status") == "fail"),
     )
-    return {"application_id": application_id, "results": public, "summary": _summary(public)}
+    return {
+        "application": application,
+        "required": required,
+        "uploads": documents,
+        "results": saved,
+        "public": public,
+    }
+
+
+@router.post("/applications/{application_id}/validate")
+def validate(application_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
+    """Replace this application's check results. Does not score the application."""
+    payload = run_and_store_validation(application_id, user.user_id)
+    return {
+        "application_id": application_id,
+        "results": payload["public"],
+        "summary": _summary(payload["public"]),
+    }
 
 
 @router.get("/applications/{application_id}/validation")

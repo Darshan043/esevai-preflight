@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto bg-navy text-sky">
+    <footer className="mt-auto bg-navy text-sky print:hidden">
       <div className="identity-bar" aria-hidden="true">
         <span className="bg-[#ff9933]" />
         <span className="bg-white" />

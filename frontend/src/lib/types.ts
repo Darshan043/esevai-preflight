@@ -94,3 +94,59 @@ export type ValidationResult = {
   details: Record<string, unknown>;
   created_at: string;
 };
+
+export type ReadinessLabel = "ready" | "almost_ready" | "not_ready";
+
+export type ReportIssue = {
+  check_code: string;
+  status: "pass" | "warning" | "fail";
+  message: string;
+  fix_suggestion: string;
+};
+
+export type ReportDocument = {
+  required_document_id: string;
+  code: string;
+  name_en: string;
+  name_ta: string | null;
+  is_mandatory: boolean;
+  state: "missing" | "passed" | "check_advised" | "needs_fix";
+  score: number | null;
+  issues: ReportIssue[];
+};
+
+export type ReportNextStep = {
+  priority: number;
+  type: string;
+  text: string;
+  document_code: string | null;
+};
+
+export type ReportCarryItem = {
+  name_en: string;
+  name_ta: string | null;
+  is_mandatory: boolean;
+};
+
+export type ReadinessReport = {
+  generated_at: string;
+  score: number;
+  label: ReadinessLabel;
+  counts: {
+    documents_required: number;
+    documents_uploaded: number;
+    mandatory_missing: number;
+    pass: number;
+    warning: number;
+    fail: number;
+  };
+  documents: ReportDocument[];
+  application_issues: ReportIssue[];
+  next_steps: ReportNextStep[];
+  carry_list: ReportCarryItem[];
+};
+
+export type ReportPayload = {
+  report: ReadinessReport | null;
+  is_current: boolean;
+};

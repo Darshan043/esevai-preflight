@@ -11,6 +11,7 @@ import { PageBanner } from "@/components/PageBanner";
 import { PageContainer } from "@/components/PageContainer";
 import { getRequestLanguage, listMyApplications } from "@/lib/catalog";
 import { pickName } from "@/lib/language";
+import { LABEL_COPY } from "@/lib/report";
 import { getUserAndProfile } from "@/lib/supabase/server";
 
 async function ApplicationList({ searchParams }: { searchParams: Promise<{ error?: string | string[] }> }) {
@@ -50,19 +51,28 @@ async function ApplicationList({ searchParams }: { searchParams: Promise<{ error
                   </p>
                 </div>
                 <p className="mt-3 text-sm text-ink">Started {item.created_at.slice(0, 10)}</p>
-                {item.readiness_score != null ? (
-                  <p className="mt-1 text-sm text-ink">Readiness score: {item.readiness_score}</p>
-                ) : null}
+                {item.readiness_score != null && item.label ? (
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink">
+                    <span>Score {item.readiness_score}</span>
+                    <span className={`rounded-full px-3 py-1 text-sm font-semibold ${LABEL_COPY[item.label].className}`}>
+                      {LABEL_COPY[item.label].title}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted">Not checked yet</p>
+                )}
                 <p className="mt-1 text-sm text-ink">
                   {item.uploadedCount} of {item.requiredCount} required documents uploaded
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <Link
-                    href={`/applications/${item.id}`}
-                    className="btn-primary"
-                  >
+                  <Link href={`/applications/${item.id}`} className="btn-primary">
                     Open
                   </Link>
+                  {item.readiness_score != null && item.label ? (
+                    <Link href={`/applications/${item.id}/report`} className="btn-secondary">
+                      View report
+                    </Link>
+                  ) : null}
                   <DeleteApplicationButton applicationId={item.id} />
                 </div>
               </Card>

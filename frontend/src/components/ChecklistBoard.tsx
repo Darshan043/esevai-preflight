@@ -10,7 +10,8 @@ import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
 import { UploadSlot } from "@/components/UploadSlot";
 import { adviceMatches, explainFailureMessage, issueSignature, type AiAdvice } from "@/lib/ai";
-import { ApiError, NETWORK_ERROR, explainApplication, fetchAiAdvice, validateApplication } from "@/lib/api";
+import { ApiError, NETWORK_ERROR, explainApplication, fetchAiAdvice, generateReport, validateApplication } from "@/lib/api";
+import { reportFailureMessage } from "@/lib/report";
 import { parseLanguage, type Language } from "@/lib/language";
 import { restoreSuspended, resultsAfterLocalChange, validationOutcome } from "@/lib/replacement";
 import { createClient } from "@/lib/supabase/client";
@@ -57,12 +58,18 @@ export function ChecklistBoard({
   const [advice, setAdvice] = useState<AiAdvice | null>(null);
   const [adviceError, setAdviceError] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
   const adviceSignature = useRef<string | null>(null);
   const epoch = useRef(0);
   const suspended = useRef<ValidationResult[] | null>(null);
   const gate = useRef({ running: false, again: false });
   const flight = useRef<Promise<void> | null>(null);
   const uploadedCount = slots.filter((slot) => uploads[slot.id]).length;
+  const stillReading = Object.values(uploads).some(
+    (upload) => upload && (upload.status === "uploaded" || upload.status === "processing"),
+  );
+  const canGenerate = uploadedCount > 0 && !stillReading && !generating;
 
   function suspend(uploadId: string | null) {
     epoch.current += 1;
@@ -226,6 +233,34 @@ export function ChecklistBoard({
     }
   }
 
+  async function generateReadinessReport() {
+    setGenerating(true);
+    setReportError(null);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        router.push(`/login?next=/applications/${applicationId}`);
+        return;
+      }
+      await generateReport(applicationId, token);
+      router.push(`/applications/${applicationId}/report`);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        router.push(`/login?next=/applications/${applicationId}`);
+        return;
+      }
+      setReportError(
+        caught instanceof ApiError
+          ? reportFailureMessage(caught.status, caught.message)
+          : "The report could not be created. Please try again.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <>
       <header className="page-banner flex flex-col gap-3">
@@ -350,12 +385,24 @@ export function ChecklistBoard({
             <div>
               <button
                 type="button"
-                disabled
-                className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
+                className="btn-primary w-full"
+                disabled={!canGenerate}
+                onClick={() => void generateReadinessReport()}
               >
-                Run readiness check
+                {generating ? "Generating…" : "Generate readiness report"}
               </button>
-              <p className="mt-2 text-sm text-muted">Report available in a later step</p>
+              {stillReading ? (
+                <p className="mt-2 text-sm text-ink">Wait until every uploaded file has finished being read.</p>
+              ) : null}
+              {uploadedCount === 0 ? (
+                <p className="mt-2 text-sm text-muted">Upload at least one document first.</p>
+              ) : null}
+              {reportError ? <p className="mt-2 text-sm text-red-800">{reportError}</p> : null}
+              {reportError ? (
+                <button type="button" className="btn-secondary mt-2" onClick={() => void generateReadinessReport()}>
+                  Retry
+                </button>
+              ) : null}
             </div>
           </div>
         </aside>

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import admin, ai, documents, health, me, validation
+from app.routers import admin, ai, documents, health, me, report, validation
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ app.include_router(admin.router)
 app.include_router(documents.router)
 app.include_router(validation.router)
 app.include_router(ai.router)
+app.include_router(report.router)
 
 
 @app.exception_handler(Exception)

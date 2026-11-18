@@ -91,10 +91,14 @@ def complete_json(system: str, user: str, max_tokens: int | None = None) -> tupl
         except Exception as exc:
             category, transient = _classify(exc)
             last_category = category
-            logger.info(
-                "gemini finished model=%s status=%s ms=%s attempt=%s",
+            http_status = getattr(exc, "code", None)
+            if not isinstance(http_status, int):
+                http_status = getattr(exc, "status_code", None)
+            logger.warning(
+                "gemini request failed model=%s category=%s http_status=%s ms=%s attempt=%s",
                 model,
                 category,
+                http_status if isinstance(http_status, int) else "-",
                 int((time.perf_counter() - started) * 1000),
                 attempt,
             )
@@ -114,22 +118,30 @@ def _usage(response: Any) -> dict[str, int]:
     }
 
 
+# A retry delay at or below this is a short wait. Longer delays are not retried here.
+_SHORT_RETRY_SECONDS = 120
+_RATE_MARKERS = ("perminute", "persecond", "requestsperminute")
+_QUOTA_MARKERS = ("perday", "permonth", "billing")
+
+
 def _classify(exc: Exception) -> tuple[str, bool]:
     """Return a short category and whether one retry is allowed."""
     name = type(exc).__name__.lower()
     status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
-    text = f"{name} {status or ''}".lower()
-    # Do not inspect a long message that might echo a key. Status and type are enough,
-    # plus a few stable words Google puts in the exception class or code.
-    blob = text
+    # Do not inspect the provider message. It can be long and is not logged.
+    # Structured status, reason, quota ids, and retry delays are enough.
     code_text = str(getattr(exc, "status", "") or "").lower()
-    blob = f"{blob} {code_text}"
     if "timeout" in name or "deadline" in name:
         return "timeout", False
     if status in {401, 403} or "unauth" in name or "permission" in name:
         return "invalid key", False
     if status == 404 or "notfound" in name or "not_found" in code_text:
         return "model not found", False
+    limit = _provider_limit(getattr(exc, "details", None))
+    if limit == "quota":
+        return "no credit or quota", False
+    if limit == "rate" and status == 429:
+        return "rate limited", True
     if "resource_exhausted" in code_text or "quota" in name:
         return "no credit or quota", False
     if status == 429 or "rate" in name:
@@ -139,3 +151,68 @@ def _classify(exc: Exception) -> tuple[str, bool]:
     if "connect" in name or "network" in name or "transport" in name:
         return "network", True
     return "network", False
+
+
+def _provider_limit(payload: object) -> str | None:
+    """Tell a short rate limit from exhausted quota using structured details only."""
+    saw_rate = False
+    saw_quota = False
+    for entry in _detail_entries(payload):
+        reason = str(entry.get("reason") or "").upper()
+        if reason == "RATE_LIMIT_EXCEEDED":
+            saw_rate = True
+        elif reason in {"QUOTA_EXCEEDED", "BILLING_DISABLED", "BILLING_NOT_ACTIVE"}:
+            saw_quota = True
+        delay = _retry_seconds(entry.get("retryDelay"))
+        if delay is not None:
+            if delay <= _SHORT_RETRY_SECONDS:
+                saw_rate = True
+            else:
+                saw_quota = True
+        violations = entry.get("violations")
+        if not isinstance(violations, list):
+            continue
+        for violation in violations:
+            if not isinstance(violation, dict):
+                continue
+            label = f"{violation.get('quotaId') or ''} {violation.get('quotaMetric') or ''}"
+            folded = label.lower().replace("-", "").replace("_", "")
+            if any(marker in folded for marker in _QUOTA_MARKERS):
+                saw_quota = True
+            elif any(marker in folded for marker in _RATE_MARKERS):
+                saw_rate = True
+    if saw_quota:
+        return "quota"
+    if saw_rate:
+        return "rate"
+    return None
+
+
+def _detail_entries(payload: object) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    error = payload.get("error")
+    details = error.get("details") if isinstance(error, dict) else None
+    if not isinstance(details, list):
+        details = payload.get("details")
+    if not isinstance(details, list):
+        return []
+    return [entry for entry in details if isinstance(entry, dict)]
+
+
+def _retry_seconds(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value >= 0 else None
+    if isinstance(value, dict):
+        return _retry_seconds(value.get("seconds"))
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text.endswith("s"):
+        return None
+    number = text[:-1]
+    if number.count(".") > 1 or not number.replace(".", "", 1).isdigit():
+        return None
+    return float(number)

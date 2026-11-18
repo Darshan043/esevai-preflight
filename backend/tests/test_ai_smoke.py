@@ -1,5 +1,6 @@
 """Smoke-test categories. The Gemini client is always replaced, so nothing calls Google."""
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -81,7 +82,10 @@ def test_empty_200_is_returned_not_raised(monkeypatch: pytest.MonkeyPatch) -> No
     assert smoke_outcome(text) == "empty_response"
 
 
-def test_unavailable_is_network_and_retries_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unavailable_is_network_and_retries_once(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     calls = {"count": 0}
 
     def generate(**_kwargs: object) -> None:
@@ -89,9 +93,103 @@ def test_unavailable_is_network_and_retries_once(monkeypatch: pytest.MonkeyPatch
         raise _ApiError(503, "UNAVAILABLE")
 
     _install_client(monkeypatch, generate)
-    with pytest.raises(AIUnavailableError) as caught:
+    with caplog.at_level(logging.WARNING), pytest.raises(AIUnavailableError) as caught:
         complete_json("system", "user", max_tokens=16)
     assert caught.value.category == "network"
+    assert caught.value.status_code == 503
+    assert calls["count"] == 2
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    for record in warnings:
+        message = record.getMessage()
+        assert "category=network" in message
+        assert "http_status=503" in message
+        assert "api error" not in message
+        assert "UNAVAILABLE" not in message
+
+
+def test_short_429_is_rate_limited_and_retried_once(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    calls = {"count": 0}
+    details = {
+        "error": {
+            "code": 429,
+            "message": "SECRET_PROVIDER_TEXT",
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "20s"},
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [{"quotaId": "GenerateRequestsPerMinutePerProjectPerModel", "quotaMetric": "requests"}],
+                },
+            ],
+        }
+    }
+
+    def generate(**_kwargs: object) -> None:
+        calls["count"] += 1
+        raise _ApiError(429, "RESOURCE_EXHAUSTED", details, "SECRET_PROVIDER_TEXT")
+
+    _install_client(monkeypatch, generate)
+    with caplog.at_level(logging.WARNING), pytest.raises(AIUnavailableError) as caught:
+        complete_json("system", "user", max_tokens=16)
+    assert caught.value.category == "rate limited"
+    assert caught.value.status_code == 429
+    assert calls["count"] == 2
+    assert "SECRET_PROVIDER_TEXT" not in caplog.text
+
+
+def test_daily_quota_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"count": 0}
+    details = {
+        "error": {
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "20s"},
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [{"quotaId": "GenerateContentInputTokensPerModelPerDay"}],
+                },
+            ],
+        }
+    }
+
+    def generate(**_kwargs: object) -> None:
+        calls["count"] += 1
+        raise _ApiError(429, "RESOURCE_EXHAUSTED", details)
+
+    _install_client(monkeypatch, generate)
+    with pytest.raises(AIUnavailableError) as caught:
+        complete_json("system", "user")
+    assert caught.value.category == "no credit or quota"
+    assert caught.value.status_code == 503
+    assert calls["count"] == 1
+
+
+def test_bare_resource_exhausted_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"count": 0}
+
+    def generate(**_kwargs: object) -> None:
+        calls["count"] += 1
+        raise _ApiError(429, "RESOURCE_EXHAUSTED")
+
+    _install_client(monkeypatch, generate)
+    with pytest.raises(AIUnavailableError) as caught:
+        complete_json("system", "user")
+    assert caught.value.category == "no credit or quota"
+    assert calls["count"] == 1
+
+
+def test_plain_429_is_still_retried_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"count": 0}
+
+    def generate(**_kwargs: object) -> None:
+        calls["count"] += 1
+        raise _ApiError(429, "")
+
+    _install_client(monkeypatch, generate)
+    with pytest.raises(AIUnavailableError) as caught:
+        complete_json("system", "user")
+    assert caught.value.category == "rate limited"
     assert calls["count"] == 2
 
 
@@ -127,7 +225,8 @@ def test_production_call_does_not_set_thinking_level(monkeypatch: pytest.MonkeyP
 
 
 class _ApiError(Exception):
-    def __init__(self, code: int, status: str) -> None:
+    def __init__(self, code: int, status: str, details: dict[str, object] | None = None, message: str = "api error") -> None:
         self.code = code
         self.status = status
-        super().__init__("api error")
+        self.details = details
+        super().__init__(message)

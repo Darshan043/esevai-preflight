@@ -44,8 +44,8 @@ export function SiteFooter() {
         <div>
           <p className="text-sm font-semibold text-white">Privacy</p>
           <p className="mt-3 text-sm leading-6">
-            Your files stay on your account. This preview does not upload documents yet. Always confirm
-            the latest requirements on the official Tamil Nadu e-Sevai portal.
+            Your files stay on your account. Always confirm the latest requirements on the official
+            Tamil Nadu e-Sevai portal.
           </p>
         </div>
       </div>

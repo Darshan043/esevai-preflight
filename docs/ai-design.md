@@ -18,7 +18,7 @@ The JSON object allows only:
 | `text_language` | `en`, `ta`, `mixed`, or null |
 | `extraction_confidence` | `high`, `medium`, or `low` |
 
-Unknown keys are rejected. Addresses are not requested. A saved record also stores `_meta` with the model name, the time, and the document `updated_at` from before the save. The browser does not receive `_meta`.
+Unknown top-level keys are ignored. Known fields stay strict (`extra="forbid"` after the extra keys are dropped). Addresses are not requested. A saved record also stores `_meta` with the model name, the time, and the document `updated_at` from before the save. The browser does not receive `_meta`.
 
 High or medium confidence can supply the name and dates used by the existing checks. Low confidence and an empty record keep the Step 8 heuristics. An image-quality or document-type failure is never turned into a pass. An expiry date before today fails even when no maximum age is configured.
 

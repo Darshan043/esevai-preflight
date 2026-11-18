@@ -55,6 +55,54 @@ export function issueSignature(results: ValidationResult[]): string {
     .join("\n");
 }
 
+export const DAILY_AI_LIMIT_MESSAGE = "The daily AI limit has been reached. Please try again tomorrow.";
+export const PROVIDER_BUSY_MESSAGE = "AI is busy; try again after a short wait.";
+export const PROVIDER_QUOTA_MESSAGE =
+  "AI assistance is temporarily unavailable due to the provider's quota. Standard checks still work.";
+export const EXTRACT_PARSE_MESSAGE =
+  "AI could not read the details from this document. Your standard checks still work. You can try AI again.";
+const GENERIC_UNAVAILABLE = "AI assistance is unavailable right now – your standard checks still work";
+const PROVIDER_UNAVAILABLE = "AI assistance is unavailable right now. Your standard checks still work.";
+const PROVIDER_BUSY_EXTRACT = "AI assistance is busy right now. Please try again in a little while.";
+
+export function explainFailureMessage(status: number, detail: string): string {
+  if (detail === "AI assistance is turned off.") {
+    return detail;
+  }
+  if (status === 429 && detail === DAILY_AI_LIMIT_MESSAGE) {
+    return DAILY_AI_LIMIT_MESSAGE;
+  }
+  if (status === 429) {
+    return PROVIDER_BUSY_MESSAGE;
+  }
+  if (detail === PROVIDER_QUOTA_MESSAGE) {
+    return PROVIDER_QUOTA_MESSAGE;
+  }
+  return detail || GENERIC_UNAVAILABLE;
+}
+
+export function extractFailureMessage(status: number, detail: string): string {
+  if (detail === "AI assistance is turned off.") {
+    return detail;
+  }
+  if (status === 429 && detail === DAILY_AI_LIMIT_MESSAGE) {
+    return DAILY_AI_LIMIT_MESSAGE;
+  }
+  if (status === 429) {
+    return PROVIDER_BUSY_MESSAGE;
+  }
+  if (detail === PROVIDER_QUOTA_MESSAGE) {
+    return PROVIDER_QUOTA_MESSAGE;
+  }
+  if (detail === EXTRACT_PARSE_MESSAGE) {
+    return EXTRACT_PARSE_MESSAGE;
+  }
+  if (detail === PROVIDER_UNAVAILABLE || detail === PROVIDER_BUSY_EXTRACT) {
+    return detail;
+  }
+  return GENERIC_UNAVAILABLE;
+}
+
 export function adviceMatches(advice: AiAdvice | null, results: ValidationResult[]): boolean {
   if (!advice || advice.items.length === 0) {
     return false;

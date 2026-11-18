@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { AiDetailsPanel } from "@/components/AiDetails";
 import { CheckList } from "@/components/CheckList";
 import { StatusBadge } from "@/components/StatusBadge";
-import { visibleAiDetails } from "@/lib/ai";
+import { extractFailureMessage, visibleAiDetails } from "@/lib/ai";
 import {
   ApiError,
   NETWORK_ERROR,
@@ -321,10 +321,9 @@ export function UploadSlot({
       if (!isCurrent(operation)) {
         return;
       }
-      const turnedOff = caught instanceof ApiError && caught.message === "AI assistance is turned off.";
       setAiNotice(
-        turnedOff
-          ? "AI assistance is turned off."
+        caught instanceof ApiError
+          ? extractFailureMessage(caught.status, caught.message)
           : "AI assistance is unavailable right now – your standard checks still work",
       );
     } finally {

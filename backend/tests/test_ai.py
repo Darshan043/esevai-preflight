@@ -1,10 +1,12 @@
 """AI routes and parsers. The Gemini client is replaced and never calls Google."""
 
+import json
 import logging
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.ai.client import AIUnavailableError
 from app.ai.explanations import ExplanationParseError, build_explanation_prompt, parse_explanations
 from app.ai.extraction import ExtractionParseError, build_extraction_prompt, parse_extraction
 from app.ai.hygiene import with_ai_advice, without_ai_advice
@@ -69,14 +71,38 @@ def test_parse_extraction_accepts_json_and_rejects_bad_replies() -> None:
     linked = dict(VALID)
     linked["issuing_authority"] = "Office https://evil.example"
     assert "http" not in str(parse_extraction(json.dumps(linked))["issuing_authority"])
-    with pytest.raises(ExtractionParseError):
+    extra = parse_extraction(json.dumps({**VALID, "status": "pass", "score": 99, "address": "12 Street"}))
+    assert extra["holder_name"] == "Example Person"
+    assert extra["extraction_confidence"] == "high"
+    assert "status" not in extra and "score" not in extra and "address" not in extra
+    with pytest.raises(ExtractionParseError) as last4:
         parse_extraction(json.dumps({**VALID, "id_last4": "12"}))
-    with pytest.raises(ExtractionParseError):
-        parse_extraction(json.dumps({**VALID, "status": "pass"}))
-    with pytest.raises(ExtractionParseError):
+    assert last4.value.rule == "id_last4"
+    with pytest.raises(ExtractionParseError) as named:
         parse_extraction(json.dumps({**VALID, "holder_name": "Ravi 1"}))
-    with pytest.raises(ExtractionParseError):
+    assert named.value.rule == "holder_name"
+    with pytest.raises(ExtractionParseError) as broken:
         parse_extraction("this is not json")
+    assert broken.value.rule == "json"
+
+
+def test_parse_extraction_rejects_invalid_known_fields() -> None:
+    import json
+
+    missing = dict(VALID)
+    del missing["extraction_confidence"]
+    with pytest.raises(ExtractionParseError) as required:
+        parse_extraction(json.dumps(missing))
+    assert required.value.rule == "missing_extraction_confidence"
+    with pytest.raises(ExtractionParseError) as confidence:
+        parse_extraction(json.dumps({**VALID, "extraction_confidence": "sure"}))
+    assert confidence.value.rule == "extraction_confidence"
+    with pytest.raises(ExtractionParseError) as expiry:
+        parse_extraction(json.dumps({**VALID, "expiry_date": "15-06-2024"}))
+    assert expiry.value.rule == "expiry_date"
+    with pytest.raises(ExtractionParseError) as malformed:
+        parse_extraction("{")
+    assert malformed.value.rule == "json"
 
 
 def test_explanation_prompt_skips_passes_and_drops_private_fields() -> None:
@@ -257,7 +283,89 @@ def test_extract_rejects_unread_and_failed_ai(monkeypatch: pytest.MonkeyPatch) -
     assert failed.status_code == 502
     assert store.document["extracted_fields"] == {}
     assert KEY not in failed.text
-    assert "standard checks still work" in failed.json()["detail"]
+    assert failed.json()["detail"] == (
+        "AI could not read the details from this document. Your standard checks still work. You can try AI again."
+    )
+
+
+def test_extract_failure_logs_category_and_status(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    store = Store()
+    _install(monkeypatch, store)
+
+    def unavailable(system: str, user: str, max_tokens: int | None = None) -> tuple[str, dict[str, int]]:
+        del system, max_tokens
+        store.calls += 1
+        store.prompts.append(user)
+        raise AIUnavailableError("network")
+
+    monkeypatch.setattr("app.routers.ai.complete_json", unavailable)
+    with caplog.at_level(logging.WARNING):
+        failed = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
+    assert failed.status_code == 503
+    assert failed.json()["detail"] == "AI assistance is unavailable right now. Your standard checks still work."
+    assert store.document["extracted_fields"] == {}
+    warning = _extraction_warning(caplog)
+    assert warning.levelno == logging.WARNING
+    message = warning.getMessage()
+    assert "Gemini document extraction" in message
+    assert "category=network" in message
+    assert "http_status=503" in message
+    assert KEY not in message and MARKER not in message and PATH not in message
+
+    caplog.clear()
+    monkeypatch.setattr(
+        "app.routers.ai.complete_json",
+        lambda *_args, **_kwargs: ("not json", {"prompt_tokens": 1, "output_tokens": 0}),
+    )
+    with caplog.at_level(logging.WARNING):
+        parsed = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
+    assert parsed.status_code == 502
+    assert store.document["extracted_fields"] == {}
+    parse_warning = _extraction_warning(caplog)
+    assert parse_warning.levelno == logging.WARNING
+    parse_message = parse_warning.getMessage()
+    assert "Gemini document extraction" in parse_message
+    assert "category=parse" in parse_message
+    assert "http_status=502" in parse_message
+    assert "rule=json" in parse_message
+    assert KEY not in parse_message and MARKER not in parse_message and PATH not in parse_message
+    assert "not json" not in parse_message
+
+    caplog.clear()
+    secret_reply = json.dumps(
+        {
+            **VALID,
+            "extraction_confidence": "sure",
+            "holder_name": "SECRET_PERSON",
+            "note": "SECRET_NOTE",
+        }
+    )
+    monkeypatch.setattr(
+        "app.routers.ai.complete_json",
+        lambda *_args, **_kwargs: (secret_reply, {"prompt_tokens": 1, "output_tokens": 0}),
+    )
+    with caplog.at_level(logging.WARNING):
+        invalid = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
+    assert invalid.status_code == 502
+    assert store.document["extracted_fields"] == {}
+    secret_warning = _extraction_warning(caplog)
+    secret_message = secret_warning.getMessage()
+    assert "category=parse" in secret_message
+    assert "rule=extraction_confidence" in secret_message
+    assert "SECRET_PERSON" not in secret_message
+    assert "SECRET_NOTE" not in caplog.text
+    assert "SECRET_PERSON" not in caplog.text
+    assert "sure" not in secret_message
+
+
+def _extraction_warning(caplog: pytest.LogCaptureFixture) -> logging.LogRecord:
+    matches = [
+        record
+        for record in caplog.records
+        if record.name == "app.routers.ai" and record.levelno == logging.WARNING
+    ]
+    assert len(matches) == 1
+    return matches[0]
 
 
 def test_ai_disabled_and_daily_limit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -317,6 +425,52 @@ def test_explain_merges_summary_and_skips_passes(monkeypatch: pytest.MonkeyPatch
     assert saved.status_code == 200
     assert saved.json()["overall_tip"] == "Check the date."
     assert client.get(f"/applications/{APP_ID}/ai-advice", headers=_auth("99999999-9999-9999-9999-999999999999")).status_code == 404
+
+
+def test_explain_distinguishes_rate_limit_quota_and_daily_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = Store()
+    store.results = [
+        {
+            "id": "warn-1",
+            "uploaded_document_id": DOC_ID,
+            "check_code": "date_validity",
+            "status": "warning",
+            "message": "We could not find a date.",
+            "fix_suggestion": "Show the date.",
+        }
+    ]
+    _install(monkeypatch, store)
+
+    def raise_category(category: str):
+        def fail(system: str, user: str, max_tokens: int | None = None) -> tuple[str, dict[str, int]]:
+            del system, max_tokens
+            store.calls += 1
+            store.prompts.append(user)
+            raise AIUnavailableError(category)
+
+        return fail
+
+    monkeypatch.setattr("app.routers.ai.complete_json", raise_category("rate limited"))
+    busy = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
+    assert busy.status_code == 429
+    assert busy.json()["detail"] == "AI is busy; try again after a short wait."
+    assert "quota" not in busy.json()["detail"]
+    assert store.application["summary"] == {"kept": True}
+
+    monkeypatch.setattr("app.routers.ai.complete_json", raise_category("no credit or quota"))
+    quota = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
+    assert quota.status_code == 503
+    assert quota.json()["detail"] == (
+        "AI assistance is temporarily unavailable due to the provider's quota. Standard checks still work."
+    )
+    assert store.application["summary"] == {"kept": True}
+
+    monkeypatch.setattr(settings, "AI_MAX_CALLS_PER_USER_PER_DAY", 0)
+    calls_before = store.calls
+    daily = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
+    assert daily.status_code == 429
+    assert daily.json()["detail"] == "The daily AI limit has been reached. Please try again tomorrow."
+    assert store.calls == calls_before
 
 
 def test_validate_and_process_clear_saved_advice(monkeypatch: pytest.MonkeyPatch) -> None:

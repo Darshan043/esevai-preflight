@@ -21,6 +21,10 @@ _SHORT = 80
 class ExtractionParseError(Exception):
     """The model reply was not the JSON object we asked for."""
 
+    def __init__(self, rule: str = "json") -> None:
+        self.rule = rule if rule in _PARSE_RULES else "schema"
+        super().__init__("extraction parse failed")
+
 
 class ExtractedFields(BaseModel):
     """Fields the rest of the app may store. Anything else is rejected."""
@@ -36,6 +40,12 @@ class ExtractedFields(BaseModel):
     issuing_authority: str | None = None
     text_language: Literal["en", "ta", "mixed"] | None = None
     extraction_confidence: Literal["high", "medium", "low"]
+
+
+_KNOWN_FIELDS = frozenset(ExtractedFields.model_fields)
+_PARSE_RULES = frozenset(
+    {"json", "schema", *_KNOWN_FIELDS, *(f"missing_{name}" for name in _KNOWN_FIELDS)}
+)
 
 
 def build_extraction_prompt(
@@ -78,10 +88,11 @@ def build_extraction_prompt(
 def parse_extraction(raw_text: str) -> dict[str, object]:
     """Accept one JSON object. A bad reply raises ExtractionParseError."""
     payload = _json_object(raw_text)
+    payload = {key: value for key, value in payload.items() if key in _KNOWN_FIELDS}
     if "id_last4" in payload and payload["id_last4"] not in (None, ""):
         last4 = str(payload["id_last4"]).strip()
         if not re.fullmatch(r"\d{4}", last4):
-            raise ExtractionParseError
+            raise ExtractionParseError("id_last4")
         payload["id_last4"] = last4
     elif "id_last4" in payload:
         payload["id_last4"] = None
@@ -90,27 +101,42 @@ def parse_extraction(raw_text: str) -> dict[str, object]:
             payload[key] = _clean_short(payload[key], _SHORT)
     for key in ("date_of_birth", "issue_date", "expiry_date"):
         if key in payload:
-            payload[key] = _clean_date(payload[key])
+            payload[key] = _clean_date(payload[key], key)
     holder = payload.get("holder_name")
     if isinstance(holder, str) and any(char.isdigit() for char in holder):
-        raise ExtractionParseError
+        raise ExtractionParseError("holder_name")
     try:
         parsed = ExtractedFields.model_validate(payload)
     except ValidationError as exc:
-        raise ExtractionParseError from exc
+        raise _from_validation(exc) from None
     return parsed.model_dump()
+
+
+def _from_validation(exc: ValidationError) -> ExtractionParseError:
+    errors = exc.errors()
+    if not errors:
+        return ExtractionParseError("schema")
+    first = errors[0]
+    loc = first.get("loc") or ()
+    field = loc[0] if loc and isinstance(loc[0], str) else "schema"
+    if field not in _KNOWN_FIELDS:
+        field = "schema"
+    err_type = str(first.get("type") or "")
+    if err_type == "missing":
+        return ExtractionParseError(f"missing_{field}")
+    return ExtractionParseError(field)
 
 
 def _json_object(raw_text: str) -> dict[str, object]:
     start = raw_text.find("{")
     if start < 0:
-        raise ExtractionParseError
+        raise ExtractionParseError("json")
     try:
         value, _end = json.JSONDecoder().raw_decode(raw_text[start:])
-    except json.JSONDecodeError as exc:
-        raise ExtractionParseError from exc
+    except json.JSONDecodeError:
+        raise ExtractionParseError("json") from None
     if not isinstance(value, dict):
-        raise ExtractionParseError
+        raise ExtractionParseError("json")
     return value
 
 
@@ -125,16 +151,16 @@ def _clean_short(value: object, limit: int) -> str | None:
     return text[:limit]
 
 
-def _clean_date(value: object) -> str | None:
+def _clean_date(value: object, field: str) -> str | None:
     if value is None or value == "":
         return None
     text = str(value).strip()
     if not _DATE.fullmatch(text):
-        return None
+        raise ExtractionParseError(field if field in _KNOWN_FIELDS else "schema")
     try:
         parsed = date.fromisoformat(text)
     except ValueError:
-        return None
+        raise ExtractionParseError(field if field in _KNOWN_FIELDS else "schema") from None
     latest = date.today() + timedelta(days=366)
     if parsed < date(1900, 1, 1) or parsed > latest:
         return None

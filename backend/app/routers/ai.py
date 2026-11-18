@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _UNAVAILABLE = "AI assistance is unavailable right now. Your standard checks still work."
+_BUSY = "AI is busy; try again after a short wait."
+_QUOTA = "AI assistance is temporarily unavailable due to the provider's quota. Standard checks still work."
+_PARSE = "AI could not read the details from this document. Your standard checks still work. You can try AI again."
 
 
 class ExplainRequest(BaseModel):
@@ -43,6 +46,15 @@ def _off() -> None:
 
 def _unavailable(exc: AIUnavailableError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=friendly_message(exc.category))
+
+
+def _explain_unavailable(exc: AIUnavailableError) -> HTTPException:
+    """Explain-only wording. Extraction keeps the shared messages."""
+    if exc.category == "rate limited":
+        return HTTPException(status_code=429, detail=_BUSY)
+    if exc.category == "no credit or quota":
+        return HTTPException(status_code=503, detail=_QUOTA)
+    return _unavailable(exc)
 
 
 def _owned_document(document_id: str, user_id: str) -> dict[str, Any]:
@@ -141,22 +153,24 @@ async def extract_document(
         raw, usage = await run_in_threadpool(complete_json, system, prompt)
         parsed = parse_extraction(raw)
     except AIUnavailableError as exc:
-        logger.info(
-            "gemini extract document=%s model=%s ms=%s status=%s",
+        logger.warning(
+            "Gemini document extraction failed document=%s model=%s ms=%s category=%s http_status=%s",
             document_id,
             model,
             int((time.perf_counter() - started) * 1000),
             exc.category,
+            exc.status_code,
         )
         raise _unavailable(exc) from None
-    except ExtractionParseError:
-        logger.info(
-            "gemini extract document=%s model=%s ms=%s status=parse",
+    except ExtractionParseError as exc:
+        logger.warning(
+            "Gemini document extraction failed document=%s model=%s ms=%s category=parse http_status=502 rule=%s",
             document_id,
             model,
             int((time.perf_counter() - started) * 1000),
+            exc.rule,
         )
-        raise HTTPException(status_code=502, detail=_UNAVAILABLE) from None
+        raise HTTPException(status_code=502, detail=_PARSE) from None
 
     stored = {
         **parsed,
@@ -169,6 +183,12 @@ async def extract_document(
     try:
         update_rows("uploaded_documents", {"id": f"eq.{document_id}"}, {"extracted_fields": stored})
     except SupabaseRequestError:
+        logger.warning(
+            "Gemini document extraction failed document=%s model=%s ms=%s category=save http_status=502",
+            document_id,
+            model,
+            int((time.perf_counter() - started) * 1000),
+        )
         raise HTTPException(status_code=502, detail=_UNAVAILABLE) from None
     logger.info(
         "gemini extract document=%s model=%s ms=%s prompt_tokens=%s output_tokens=%s status=ok",
@@ -219,7 +239,7 @@ async def explain_application(
             int((time.perf_counter() - started) * 1000),
             exc.category,
         )
-        raise _unavailable(exc) from None
+        raise _explain_unavailable(exc) from None
     except ExplanationParseError:
         logger.info(
             "gemini explain application=%s model=%s ms=%s status=parse",

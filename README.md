@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 10 complete – readiness report. The saved checks become a score, a Ready / Almost ready / Not ready label, a “what to do next” list, and a printable report page. AI explanations never change the score.
+Step 11 complete – admin dashboard. Admins can add, edit, duplicate, and activate services, manage each service's required documents and rules, and see aggregate usage statistics. Citizens never see inactive services in the catalogue.
 
 ## Authentication
 
@@ -42,9 +42,13 @@ Next.js `src/proxy.ts` refreshes the session and sends visitors who are not sign
 | `/applications` | Protected |
 | `/applications/[id]` | Protected, owner only |
 | `/applications/[id]/report` | Protected, owner only |
-| `/admin` | Protected, admin only |
+| `/admin` | Protected, admin only (overview) |
+| `/admin/services` | Protected, admin only |
+| `/admin/services/new` | Protected, admin only |
+| `/admin/services/[id]` | Protected, admin only |
+| `/admin/checks` | Protected, admin only |
 
-The FastAPI backend checks the access token on `GET /me` and `GET /admin/ping`. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page.
+The FastAPI backend checks the access token on `GET /me` and every `/admin/*` route. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page. Hiding a link is not security: every admin API uses `require_admin`.
 
 Frontend env names: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `MAX_UPLOAD_MB`, `GEMINI_API_KEY`, `GEMINI_MODEL`. The Gemini key stays in `backend/.env` and is never sent to the browser. At deployment, set `GEMINI_API_KEY` and `GEMINI_MODEL` in Render as well.
@@ -125,6 +129,21 @@ Below that breakpoint the page is a single column, with the results panel first.
 The report holds service and document display names, check messages, fix suggestions, counts, the score, the label, next steps, and the carry list. It does not hold OCR text, holder names, ID numbers, storage paths, or emails. The formula and two worked examples are in [docs/readiness-scoring.md](docs/readiness-scoring.md).
 
 Open `/applications/[id]/report` to see the score, what to do next, each document, and the carry list. **Print / Save as PDF** uses the browser print dialog (`window.print()`). There is no server-side PDF export in this step. Replacing or deleting a file returns the application to draft and clears the saved report.
+
+## Admin
+
+Signed-in admins open `/admin` for usage totals (users, applications, reports, average score), a label breakdown, top failure reasons, per-service numbers, and recent checks. Users in those tables are shown as `User #` plus six hash characters. Files, OCR text, storage paths, emails, and full user ids are never returned.
+
+`/admin/services` lists every service, including drafts. New services start inactive and unverified. Duplicate always creates a draft copy. A slug cannot change after the first application. Delete is allowed only when the service has never been used; otherwise deactivate it. The same lock applies to a required-document code after a file has been uploaded.
+
+Invalid rules cannot be saved. The Step 8 engine reads this configuration at runtime. See [docs/admin-guide.md](docs/admin-guide.md).
+
+Offline demo (no database):
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\admin_demo.py
+```
 
 ## Database
 

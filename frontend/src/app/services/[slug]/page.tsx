@@ -37,7 +37,8 @@ async function ServiceDetail({
   searchParams: Promise<{ error?: string | string[] }>;
 }) {
   const query = await searchParams;
-  const startFailed = query.error === "start";
+  const errorCode = Array.isArray(query.error) ? query.error[0] : query.error;
+  const startFailed = errorCode === "start";
   const [language, current] = await Promise.all([getRequestLanguage(), getUserAndProfile()]);
   const draftId = current ? await latestDraftId(service.id, current.userId) : null;
 
@@ -57,6 +58,11 @@ async function ServiceDetail({
       {startFailed ? (
         <p className="rounded-md border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
           We could not start your document check. Please try again.
+        </p>
+      ) : null}
+      {errorCode === "inactive" ? (
+        <p className="rounded-md border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+          This service is not accepting new checks. Open an existing application from My applications if you already started one.
         </p>
       ) : null}
       <section className="flex flex-col gap-4">

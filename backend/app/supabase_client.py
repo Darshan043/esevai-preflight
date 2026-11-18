@@ -94,6 +94,26 @@ def _object_path(path: str) -> str:
     return "/".join(parts)
 
 
+def count_rows(table: str, params: dict[str, str] | None = None) -> int:
+    """Return how many rows match. Uses Prefer: count=exact and does not load the rows."""
+    base_url, service_key = _settings()
+    headers = _headers(service_key)
+    headers["Prefer"] = "count=exact"
+    headers["Range"] = "0-0"
+    query = dict(params or {})
+    query.setdefault("select", "id")
+    response = _send("GET", f"{base_url}/rest/v1/{table}", headers, params=query)
+    if response.status_code >= 400:
+        _raise_for_status(response, service_key)
+    header = response.headers.get("content-range") or response.headers.get("Content-Range") or ""
+    if "/" in header:
+        total = header.rsplit("/", 1)[-1]
+        if total.isdigit():
+            return int(total)
+    payload = response.json() if response.content else []
+    return len(payload) if isinstance(payload, list) else 0
+
+
 def get_rows(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
     """Read rows from a public table. Returns a list, which may be empty."""
     base_url, service_key = _settings()

@@ -15,6 +15,15 @@ export async function startNewCheck(serviceId: string, slug: string): Promise<vo
     redirect(`/login?next=${servicePath(slug)}`);
   }
 
+  const { data: service } = await supabase
+    .from("services")
+    .select("id, is_active")
+    .eq("id", serviceId)
+    .maybeSingle();
+  if (!service?.is_active) {
+    redirect(`${servicePath(slug)}?error=inactive`);
+  }
+
   const { data: row, error } = await supabase
     .from("applications")
     .insert({

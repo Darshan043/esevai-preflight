@@ -1,7 +1,21 @@
 // Talks to the FastAPI backend. The URL comes from the frontend env file.
 
 import type { AiAdvice } from "@/lib/ai";
-import type { PreviewLink, PublicUpload, ReadinessReport, ReportPayload, ValidationResult } from "@/lib/types";
+import type {
+  AdminChecksPage,
+  AdminDocument,
+  AdminDocumentInput,
+  AdminFieldError,
+  AdminService,
+  AdminServiceDetail,
+  AdminServiceInput,
+  AdminStats,
+  PreviewLink,
+  PublicUpload,
+  ReadinessReport,
+  ReportPayload,
+  ValidationResult,
+} from "@/lib/types";
 
 export type DocumentResult = {
   id: string;
@@ -51,11 +65,18 @@ export type AdminPingResponse = {
 export class ApiError extends Error {
   status: number;
   body: Record<string, unknown> | null;
+  fieldErrors: AdminFieldError[];
 
-  constructor(status: number, message: string, body: Record<string, unknown> | null = null) {
+  constructor(
+    status: number,
+    message: string,
+    body: Record<string, unknown> | null = null,
+    fieldErrors: AdminFieldError[] = [],
+  ) {
     super(message);
     this.status = status;
     this.body = body;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -357,6 +378,120 @@ export async function deleteApplicationOnServer(applicationId: string, accessTok
   if (!response.ok) {
     throw new ApiError(response.status, await readError(response));
   }
+}
+
+function fieldErrorsFrom(body: Record<string, unknown>): AdminFieldError[] {
+  const detail = body.detail;
+  if (!Array.isArray(detail)) {
+    return [];
+  }
+  return detail
+    .filter((item): item is AdminFieldError => {
+      return !!item && typeof item === "object" && typeof (item as AdminFieldError).field === "string" && typeof (item as AdminFieldError).message === "string";
+    })
+    .map((item) => ({ field: item.field, message: item.message }));
+}
+
+function detailMessage(body: Record<string, unknown>, status: number): string {
+  if (typeof body.detail === "string" && body.detail) {
+    return body.detail;
+  }
+  const fields = fieldErrorsFrom(body);
+  if (fields[0]) {
+    return fields[0].message;
+  }
+  return `The backend returned status ${status}.`;
+}
+
+async function adminRequest<T>(path: string, accessToken: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(init.body ? { "Content-Type": "application/json" } : {}),
+  };
+  const response = await authRequest(path, accessToken, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  if (response.status === 403) {
+    throw new ApiError(403, "Access denied.", body);
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, detailMessage(body, response.status), body, fieldErrorsFrom(body));
+  }
+  return body as T;
+}
+
+export async function fetchAdminStats(accessToken: string, days: number): Promise<AdminStats> {
+  return adminRequest<AdminStats>(`/admin/stats?days=${days}`, accessToken);
+}
+
+export async function fetchAdminChecks(accessToken: string, page = 1, pageSize = 20): Promise<AdminChecksPage> {
+  return adminRequest<AdminChecksPage>(`/admin/applications?page=${page}&page_size=${pageSize}`, accessToken);
+}
+
+export async function fetchAdminServices(accessToken: string): Promise<{ items: AdminService[] }> {
+  return adminRequest<{ items: AdminService[] }>("/admin/services", accessToken);
+}
+
+export async function fetchAdminService(accessToken: string, serviceId: string): Promise<AdminServiceDetail> {
+  return adminRequest<AdminServiceDetail>(`/admin/services/${serviceId}`, accessToken);
+}
+
+export async function createAdminService(accessToken: string, payload: AdminServiceInput): Promise<AdminService> {
+  return adminRequest<AdminService>("/admin/services", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminService(accessToken: string, serviceId: string, payload: AdminServiceInput): Promise<AdminService> {
+  return adminRequest<AdminService>(`/admin/services/${serviceId}`, accessToken, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function duplicateAdminService(
+  accessToken: string,
+  serviceId: string,
+  payload: { new_slug: string; new_name_en: string },
+): Promise<{ service: AdminService; documents: AdminDocument[] }> {
+  return adminRequest(`/admin/services/${serviceId}/duplicate`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminService(accessToken: string, serviceId: string): Promise<void> {
+  await adminRequest<void>(`/admin/services/${serviceId}`, accessToken, { method: "DELETE" });
+}
+
+export async function createAdminDocument(accessToken: string, serviceId: string, payload: AdminDocumentInput): Promise<AdminDocument> {
+  return adminRequest<AdminDocument>(`/admin/services/${serviceId}/documents`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminDocument(accessToken: string, documentId: string, payload: AdminDocumentInput): Promise<AdminDocument> {
+  return adminRequest<AdminDocument>(`/admin/documents/${documentId}`, accessToken, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAdminDocument(accessToken: string, documentId: string): Promise<void> {
+  await adminRequest<void>(`/admin/documents/${documentId}`, accessToken, { method: "DELETE" });
+}
+
+export async function reorderAdminDocuments(accessToken: string, serviceId: string, ids: string[]): Promise<{ items: AdminDocument[] }> {
+  return adminRequest(`/admin/services/${serviceId}/documents/reorder`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
 }
 
 export function isPublicUpload(value: unknown): value is PublicUpload {

@@ -29,4 +29,5 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 8 – document validation engine: config-driven checks, cross-document checks, results UI
 - [x] Step 9 – Gemini field extraction and plain-language explanations. Configured model: `gemini-3.5-flash-lite`. `GEMINI_API_KEY` and `GEMINI_MODEL` must also be set in Render at deployment (Step 14).
 - [x] Step 10 – readiness report: deterministic score and label, next steps, printable report page, score badge on My applications
+- [x] Step 11 – admin dashboard: service and checklist management, aggregate statistics
 - [ ] Two-column application workspace – implemented (documents left, sticky readiness panel right; single column below `lg`). Browser verification still pending.

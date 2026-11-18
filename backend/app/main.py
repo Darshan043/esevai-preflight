@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import admin, ai, documents, health, me, report, validation
+from app.routers import admin, admin_config, admin_stats, ai, documents, health, me, report, validation
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,8 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(me.router)
 app.include_router(admin.router)
+app.include_router(admin_config.router)
+app.include_router(admin_stats.router)
 app.include_router(documents.router)
 app.include_router(validation.router)
 app.include_router(ai.router)

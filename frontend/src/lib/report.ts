@@ -35,6 +35,10 @@ export function isReadinessLabel(value: unknown): value is ReadinessLabel {
   return value === "ready" || value === "almost_ready" || value === "not_ready";
 }
 
+export function issueListKey(checkCode: string, index: number): string {
+  return `${checkCode}-${index}`;
+}
+
 export function reportFailureMessage(status: number, detail: string): string {
   if (status === 400) {
     return detail || "Upload at least one document first.";

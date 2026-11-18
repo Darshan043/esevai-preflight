@@ -15,7 +15,7 @@ import {
   generateReport,
 } from "@/lib/api";
 import { parseLanguage, pickName, type Language } from "@/lib/language";
-import { DOCUMENT_STATE_COPY, LABEL_COPY, reportFailureMessage } from "@/lib/report";
+import { DOCUMENT_STATE_COPY, issueListKey, LABEL_COPY, reportFailureMessage } from "@/lib/report";
 import { createClient } from "@/lib/supabase/client";
 import type { ReadinessLabel, ReadinessReport as Report } from "@/lib/types";
 
@@ -289,8 +289,8 @@ export function ReadinessReport({
                     <p className="mt-2 text-sm text-muted">No issues to fix on this document.</p>
                   ) : (
                     <ul className="mt-3 flex flex-col gap-2">
-                      {document.issues.map((issue) => (
-                        <li key={`${document.code}-${issue.check_code}`} className="text-sm text-ink">
+                      {document.issues.map((issue, index) => (
+                        <li key={issueListKey(`${document.code}-${issue.check_code}`, index)} className="text-sm text-ink">
                           <p>{issue.message}</p>
                           {issue.fix_suggestion ? (
                             <p className="mt-1 text-muted">What to do: {issue.fix_suggestion}</p>
@@ -309,8 +309,8 @@ export function ReadinessReport({
                 Between your documents
               </h2>
               <ul className="mt-3 flex flex-col gap-2">
-                {report.application_issues.map((issue) => (
-                  <li key={issue.check_code} className="text-sm text-ink">
+                {report.application_issues.map((issue, index) => (
+                  <li key={issueListKey(issue.check_code, index)} className="text-sm text-ink">
                     <p>{issue.message}</p>
                     {issue.fix_suggestion ? <p className="mt-1 text-muted">What to do: {issue.fix_suggestion}</p> : null}
                   </li>
@@ -323,8 +323,8 @@ export function ReadinessReport({
               Documents to carry
             </h2>
             <ul className="mt-3 flex flex-col gap-2">
-              {report.carry_list.map((item) => (
-                <li key={item.name_en} className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink">
+              {report.carry_list.map((item, index) => (
+                <li key={`${item.name_en}-${index}`} className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink">
                   <span>{pickName(item, language)}</span>
                   <span className="rounded-full bg-sky px-3 py-1 font-medium text-navy">
                     {item.is_mandatory ? "Mandatory" : "Optional"}

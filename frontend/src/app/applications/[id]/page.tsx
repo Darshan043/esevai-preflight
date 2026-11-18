@@ -91,7 +91,7 @@ async function Checklist({ params }: { params: Promise<{ id: string }> }) {
 
 export default function ApplicationPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <PageContainer>
+    <PageContainer className="checklist-workspace">
       <Suspense fallback={<LoadingSkeleton label="Loading checklist" />}>
         <Checklist params={params} />
       </Suspense>

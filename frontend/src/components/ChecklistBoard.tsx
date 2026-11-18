@@ -9,7 +9,7 @@ import { Card } from "@/components/Card";
 import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
 import { UploadSlot } from "@/components/UploadSlot";
-import { adviceMatches, issueSignature, type AiAdvice } from "@/lib/ai";
+import { adviceMatches, explainFailureMessage, issueSignature, type AiAdvice } from "@/lib/ai";
 import { ApiError, NETWORK_ERROR, explainApplication, fetchAiAdvice, validateApplication } from "@/lib/api";
 import { parseLanguage, type Language } from "@/lib/language";
 import { restoreSuspended, resultsAfterLocalChange, validationOutcome } from "@/lib/replacement";
@@ -62,7 +62,6 @@ export function ChecklistBoard({
   const suspended = useRef<ValidationResult[] | null>(null);
   const gate = useRef({ running: false, again: false });
   const flight = useRef<Promise<void> | null>(null);
-  const shared = checks.filter((result) => !result.uploaded_document_id);
   const uploadedCount = slots.filter((slot) => uploads[slot.id]).length;
 
   function suspend(uploadId: string | null) {
@@ -150,7 +149,21 @@ export function ChecklistBoard({
   }
   const progress = slots.length === 0 ? 0 : Math.round((uploadedCount / slots.length) * 100);
   const problems = checks.filter((result) => result.status !== "pass");
+  const passedChecks = checks.filter((result) => result.status === "pass");
+  const failedChecks = checks.filter((result) => result.status === "fail");
+  const warningChecks = checks.filter((result) => result.status === "warning");
   const explanations = Object.fromEntries((advice?.items ?? []).map((item) => [item.id, item.explanation]));
+  const readinessLabel = checking
+    ? "Checking your documents…"
+    : checkError
+      ? "Checks could not be updated"
+      : checks.length === 0
+        ? "Checks have not been run yet"
+        : failedChecks.length > 0
+          ? "Needs attention"
+          : warningChecks.length > 0
+            ? "Review warnings"
+            : "Checks passed";
 
   useEffect(() => {
     let cancelled = false;
@@ -203,17 +216,9 @@ export function ChecklistBoard({
         router.push(`/login?next=/applications/${applicationId}`);
         return;
       }
-      if (caught instanceof ApiError && caught.status === 429) {
-        setAdviceError("The daily AI limit has been reached. Please try again tomorrow.");
-        return;
-      }
-      if (caught instanceof ApiError && caught.message === "AI assistance is turned off.") {
-        setAdviceError("AI assistance is turned off.");
-        return;
-      }
       setAdviceError(
         caught instanceof ApiError
-          ? caught.message
+          ? explainFailureMessage(caught.status, caught.message)
           : "AI assistance is unavailable right now – your standard checks still work",
       );
     } finally {
@@ -244,94 +249,116 @@ export function ChecklistBoard({
         </div>
       </header>
       <Disclaimer />
-      <section className="panel" aria-live="polite">
-        <h2 className="text-lg font-semibold text-navy">Checklist checks</h2>
-        {checking ? <p className="mt-2 text-sm text-ink">Checking your documents…</p> : null}
-        {checkNote ? <p className="mt-2 text-sm text-ink">{checkNote}</p> : null}
-        {checkError ? (
-          <div className="mt-2">
-            <p className="text-sm text-red-800">{checkError}</p>
-            <button type="button" className="btn-secondary mt-2" onClick={() => void refreshChecks()}>
-              Retry
-            </button>
-          </div>
-        ) : null}
-        {shared.length > 0 ? (
-          <CheckList results={shared} explanations={explanations} />
-        ) : (
-          <p className="mt-2 text-sm text-muted">No checklist-wide problems yet.</p>
-        )}
-        {advice?.overall_tip ? (
-          <div className="mt-3 rounded-lg border border-saffron bg-sky p-3">
-            <p className="text-sm font-semibold text-navy">Overall tip</p>
-            <p className="mt-1 text-sm text-ink">{advice.overall_tip}</p>
-            <p className="mt-2 text-sm text-muted">AI-written advice – always confirm with the official e-Sevai portal</p>
-          </div>
-        ) : null}
-      </section>
-      <ul className="flex flex-col gap-4" data-required-count={slots.length}>
-        {slots.map((slot, index) => (
-          <li key={slot.id}>
-            <Card className="service-card">
-              <h2 className="text-xl font-semibold text-navy">
-                <span className="mr-2 text-sm font-semibold text-royal">{index + 1}.</span>
-                {slot.name}
-              </h2>
-              <p className="mt-2 text-sm font-medium text-ink">{slot.isMandatory ? "Mandatory" : "Optional"}</p>
-              {slot.description ? <p className="mt-2 text-muted">Tip: {slot.description}</p> : null}
-              <p className="mt-2 text-sm text-ink">Accepted formats: {slot.acceptedFormats.join(", ")}</p>
-              <p className="mt-1 text-sm text-ink">Maximum size: {slot.maxSizeMb} MB</p>
-              {slot.validity ? <p className="mt-1 text-sm text-ink">{slot.validity}</p> : null}
-              <UploadSlot
-                applicationId={applicationId}
-                document={slot}
-                upload={uploads[slot.id] ?? null}
-                results={checks}
-                onActivity={() => refreshChecks()}
-                onSuspend={() => suspend(uploads[slot.id]?.id ?? null)}
-                onUndoSuspend={undoSuspend}
-                explanations={explanations}
-                onChange={(next) => {
-                  setUploads((current) => ({ ...current, [slot.id]: next }));
-                }}
-              />
-            </Card>
-          </li>
-        ))}
-      </ul>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <button type="button" className="btn-primary" onClick={() => void refreshChecks()} disabled={checking}>
-          {checking ? "Checking…" : "Re-run checks"}
-        </button>
-        <div>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => void explainIssues()}
-            disabled={explaining || problems.length === 0}
-          >
-            {explaining ? "Writing a simple explanation…" : "Explain issues in simple words"}
-          </button>
-          {adviceError ? <p className="mt-2 text-sm text-ink">{adviceError}</p> : null}
-          {adviceError ? (
-            <button type="button" className="btn-secondary mt-2" onClick={() => void explainIssues()}>
-              Retry
-            </button>
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.7fr)_minmax(20rem,24rem)] lg:items-start lg:gap-6">
+        <ul className="order-2 flex flex-col gap-4 lg:order-1" data-required-count={slots.length}>
+          {slots.map((slot, index) => (
+            <li key={slot.id}>
+              <Card className="service-card">
+                <h2 className="text-xl font-semibold text-navy">
+                  <span className="mr-2 text-sm font-semibold text-royal">{index + 1}.</span>
+                  {slot.name}
+                </h2>
+                <p className="mt-2 text-sm font-medium text-ink">{slot.isMandatory ? "Mandatory" : "Optional"}</p>
+                {slot.description ? <p className="mt-2 text-muted">Tip: {slot.description}</p> : null}
+                <p className="mt-2 text-sm text-ink">Accepted formats: {slot.acceptedFormats.join(", ")}</p>
+                <p className="mt-1 text-sm text-ink">Maximum size: {slot.maxSizeMb} MB</p>
+                {slot.validity ? <p className="mt-1 text-sm text-ink">{slot.validity}</p> : null}
+                <UploadSlot
+                  applicationId={applicationId}
+                  document={slot}
+                  upload={uploads[slot.id] ?? null}
+                  results={checks}
+                  onActivity={() => refreshChecks()}
+                  onSuspend={() => suspend(uploads[slot.id]?.id ?? null)}
+                  onUndoSuspend={undoSuspend}
+                  explanations={explanations}
+                  onChange={(next) => {
+                    setUploads((current) => ({ ...current, [slot.id]: next }));
+                  }}
+                />
+              </Card>
+            </li>
+          ))}
+        </ul>
+        <aside
+          className="panel order-1 lg:order-2 lg:sticky lg:top-4"
+          aria-labelledby="readiness-heading"
+          aria-live="polite"
+        >
+          <h2 id="readiness-heading" className="text-lg font-semibold text-navy">
+            Readiness and results
+          </h2>
+          <p className="mt-2 inline-flex w-fit rounded-full bg-sky px-3 py-1 text-sm font-medium text-navy">
+            {readinessLabel}
+          </p>
+          {checks.length > 0 ? (
+            <p className="mt-2 text-sm text-ink">
+              {passedChecks.length} passed, {warningChecks.length} warning
+              {warningChecks.length === 1 ? "" : "s"}, {failedChecks.length} need a fix
+            </p>
           ) : null}
-          {advice ? (
-            <p className="mt-2 text-sm text-muted">AI-written advice – always confirm with the official e-Sevai portal</p>
+          {checking ? <p className="mt-2 text-sm text-ink">Checking your documents…</p> : null}
+          {checkNote ? <p className="mt-2 text-sm text-ink">{checkNote}</p> : null}
+          {checkError ? (
+            <div className="mt-2">
+              <p className="text-sm text-red-800">{checkError}</p>
+              <button type="button" className="btn-secondary mt-2" onClick={() => void refreshChecks()}>
+                Retry
+              </button>
+            </div>
           ) : null}
-        </div>
-        <div>
-          <button
-            type="button"
-            disabled
-            className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
-          >
-            Run readiness check
-          </button>
-          <p className="mt-2 text-sm text-muted">Report available in a later step</p>
-        </div>
+          {checks.length > 0 ? (
+            <CheckList results={checks} explanations={explanations} />
+          ) : (
+            <p className="mt-2 text-sm text-muted">No checklist results yet. Upload a document or re-run checks.</p>
+          )}
+          {advice?.overall_tip ? (
+            <div className="mt-3 rounded-lg border border-saffron bg-sky p-3">
+              <p className="text-sm font-semibold text-navy">Overall tip</p>
+              <p className="mt-1 text-sm text-ink">{advice.overall_tip}</p>
+              <p className="mt-2 text-sm text-muted">
+                AI-written advice – always confirm with the official e-Sevai portal
+              </p>
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-col gap-3">
+            <button type="button" className="btn-primary" onClick={() => void refreshChecks()} disabled={checking}>
+              {checking ? "Checking…" : "Re-run checks"}
+            </button>
+            <div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => void explainIssues()}
+                disabled={explaining || problems.length === 0}
+              >
+                {explaining ? "Writing a simple explanation…" : "Explain issues in simple words"}
+              </button>
+              {explaining ? <p className="mt-2 text-sm text-ink">Writing a simple explanation…</p> : null}
+              {adviceError ? <p className="mt-2 text-sm text-ink">{adviceError}</p> : null}
+              {adviceError ? (
+                <button type="button" className="btn-secondary mt-2" onClick={() => void explainIssues()}>
+                  Retry
+                </button>
+              ) : null}
+              {advice ? (
+                <p className="mt-2 text-sm text-muted">
+                  AI-written advice – always confirm with the official e-Sevai portal
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <button
+                type="button"
+                disabled
+                className="inline-flex min-h-11 cursor-not-allowed items-center rounded-lg bg-line px-4 text-sm font-semibold text-muted"
+              >
+                Run readiness check
+              </button>
+              <p className="mt-2 text-sm text-muted">Report available in a later step</p>
+            </div>
+          </div>
+        </aside>
       </div>
     </>
   );

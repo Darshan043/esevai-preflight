@@ -69,6 +69,12 @@ body {
   }
 }
 
+@media (min-width: 1024px) {
+  .page-wrap.checklist-workspace {
+    max-width: 80rem;
+  }
+}
+
 .page-banner {
   border: 1px solid var(--color-line);
   border-top: 4px solid var(--color-royal);

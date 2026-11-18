@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 9 complete – AI integration
+Step 9 complete – AI integration. The live model is set with `GEMINI_MODEL` (currently `gemini-3.5-flash-lite`). The application checklist uses a two-column workspace; browser verification of that layout is still pending.
 
 ## Authentication
 
@@ -104,7 +104,18 @@ What is not sent: storage paths, user ids, email addresses, file bytes, images, 
 
 Limits: one call waits `AI_TIMEOUT_SECONDS` (default 30). A reply is capped by `AI_MAX_OUTPUT_TOKENS` (default 800). The smoke test uses its own 1,024-token cap. Each person may make `AI_MAX_CALLS_PER_USER_PER_DAY` calls (default 80). The count is kept in memory and resets when the server restarts. Set `AI_ENABLED=false` to turn the AI routes off without stopping uploads or checks.
 
-The model name comes only from `GEMINI_MODEL` (default `gemini-3.8-flash`). See [docs/ai-design.md](docs/ai-design.md).
+The model name comes only from `GEMINI_MODEL`. The code default is `gemini-3.8-flash`. After repeated Gemini 3.8 Flash HTTP 503/504 and 429 errors, the configured model is `gemini-3.5-flash-lite`. See [docs/ai-design.md](docs/ai-design.md) and [docs/step-reports/step-09-report.md](docs/step-reports/step-09-report.md).
+
+Unknown extra keys on an extraction JSON object are ignored. Known fields stay strict. Gemini never changes a pass or fail result.
+
+## Application workspace
+
+On `/applications/[id]`, from the `lg` breakpoint:
+
+- Left: the five document cards (upload, replace, delete, re-read, quality, OCR text, AI-extracted details).
+- Right: a sticky readiness panel with the full checklist, passed and failed checks, Re-run checks, Explain issues in simple words, and AI advice.
+
+Below that breakpoint the page is a single column, with the results panel first. The same validation state and API calls are reused. Browser verification of this layout is still pending.
 
 ## Database
 

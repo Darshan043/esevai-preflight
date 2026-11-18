@@ -37,6 +37,21 @@ class Settings(BaseSettings):
     # Refuse an image with more pixels than this. Also sets Pillow's bomb limit.
     OCR_MAX_PIXELS: int = 25000000
 
+    # Gemini reads masked text and writes simple explanations. The key stays on the server.
+    GEMINI_API_KEY: str = ""
+    # The only model name the app may use. Change it here, not in the code.
+    GEMINI_MODEL: str = "gemini-3.8-flash"
+    # Seconds to wait for one Gemini call.
+    AI_TIMEOUT_SECONDS: int = 30
+    # Largest reply we ask Gemini to write.
+    AI_MAX_OUTPUT_TOKENS: int = 800
+    # Longest masked OCR text we send for one document.
+    AI_MAX_INPUT_CHARS: int = 6000
+    # How many AI calls one signed-in person may make per UTC day. The count resets on restart.
+    AI_MAX_CALLS_PER_USER_PER_DAY: int = 80
+    # When false, AI routes say assistance is turned off and the rest of the app still works.
+    AI_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -54,6 +54,7 @@ export type PublicUpload = {
   status: "uploaded" | "processing" | "processed" | "failed";
   quality_metrics?: Record<string, unknown>;
   ocr_text_masked?: string | null;
+  extracted_fields?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };

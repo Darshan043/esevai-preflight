@@ -28,6 +28,7 @@ function publicUpload(upload: {
   status: PublicUpload["status"];
   quality_metrics: Record<string, unknown> | null;
   ocr_text_masked: string | null;
+  extracted_fields?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }): PublicUpload {
@@ -40,6 +41,7 @@ function publicUpload(upload: {
     status: upload.status,
     quality_metrics: upload.quality_metrics ?? {},
     ocr_text_masked: upload.ocr_text_masked,
+    extracted_fields: upload.extracted_fields ?? {},
     created_at: upload.created_at,
     updated_at: upload.updated_at,
   };
@@ -82,6 +84,7 @@ async function Checklist({ params }: { params: Promise<{ id: string }> }) {
       statusLabel={application.status === "checked" ? "Checked" : "Draft"}
       slots={slots}
       results={results}
+      language={language}
     />
   );
 }

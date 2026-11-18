@@ -2,14 +2,16 @@
 
 // The checklist the citizen sees. Uploads update the progress without reloading the page.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Card } from "@/components/Card";
 import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
 import { UploadSlot } from "@/components/UploadSlot";
-import { ApiError, NETWORK_ERROR, validateApplication } from "@/lib/api";
+import { adviceMatches, issueSignature, type AiAdvice } from "@/lib/ai";
+import { ApiError, NETWORK_ERROR, explainApplication, fetchAiAdvice, validateApplication } from "@/lib/api";
+import { parseLanguage, type Language } from "@/lib/language";
 import { restoreSuspended, resultsAfterLocalChange, validationOutcome } from "@/lib/replacement";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicUpload, ValidationResult } from "@/lib/types";
@@ -31,12 +33,14 @@ export function ChecklistBoard({
   statusLabel,
   slots,
   results,
+  language = "en",
 }: {
   applicationId: string;
   title: string;
   statusLabel: string;
   slots: ChecklistSlot[];
   results: ValidationResult[];
+  language?: Language;
 }) {
   const router = useRouter();
   const [uploads, setUploads] = useState<Record<string, PublicUpload | null>>(() => {
@@ -50,6 +54,10 @@ export function ChecklistBoard({
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState<string | null>(null);
+  const [advice, setAdvice] = useState<AiAdvice | null>(null);
+  const [adviceError, setAdviceError] = useState<string | null>(null);
+  const [explaining, setExplaining] = useState(false);
+  const adviceSignature = useRef<string | null>(null);
   const epoch = useRef(0);
   const suspended = useRef<ValidationResult[] | null>(null);
   const gate = useRef({ running: false, again: false });
@@ -104,6 +112,11 @@ export function ChecklistBoard({
             gate.current.again = outcome.repeat;
             if (outcome.apply) {
               setChecks(payload.results);
+              const nextSignature = issueSignature(payload.results);
+              if (adviceSignature.current !== nextSignature) {
+                setAdvice(null);
+                adviceSignature.current = null;
+              }
               suspended.current = null;
               setCheckNote("Checks updated.");
             }
@@ -136,6 +149,77 @@ export function ChecklistBoard({
     return promise;
   }
   const progress = slots.length === 0 ? 0 : Math.round((uploadedCount / slots.length) * 100);
+  const problems = checks.filter((result) => result.status !== "pass");
+  const explanations = Object.fromEntries((advice?.items ?? []).map((item) => [item.id, item.explanation]));
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        return;
+      }
+      try {
+        const saved = await fetchAiAdvice(applicationId, token);
+        if (cancelled || !adviceMatches(saved, results)) {
+          return;
+        }
+        setAdvice(saved);
+        adviceSignature.current = issueSignature(results);
+      } catch {
+        // Saved advice is optional. The checklist still works without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId, results]);
+
+  async function explainIssues() {
+    setExplaining(true);
+    setAdviceError(null);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        router.push(`/login?next=/applications/${applicationId}`);
+        return;
+      }
+      const match = document.cookie.match(/(?:^|; )preferred_language=([^;]*)/);
+      const chosen = parseLanguage(match ? decodeURIComponent(match[1]) : language);
+      const next = await explainApplication(applicationId, token, chosen);
+      if (!adviceMatches(next, checks)) {
+        setAdvice(null);
+        adviceSignature.current = null;
+        return;
+      }
+      setAdvice(next);
+      adviceSignature.current = issueSignature(checks);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        router.push(`/login?next=/applications/${applicationId}`);
+        return;
+      }
+      if (caught instanceof ApiError && caught.status === 429) {
+        setAdviceError("The daily AI limit has been reached. Please try again tomorrow.");
+        return;
+      }
+      if (caught instanceof ApiError && caught.message === "AI assistance is turned off.") {
+        setAdviceError("AI assistance is turned off.");
+        return;
+      }
+      setAdviceError(
+        caught instanceof ApiError
+          ? caught.message
+          : "AI assistance is unavailable right now – your standard checks still work",
+      );
+    } finally {
+      setExplaining(false);
+    }
+  }
 
   return (
     <>
@@ -172,7 +256,18 @@ export function ChecklistBoard({
             </button>
           </div>
         ) : null}
-        {shared.length > 0 ? <CheckList results={shared} /> : <p className="mt-2 text-sm text-muted">No checklist-wide problems yet.</p>}
+        {shared.length > 0 ? (
+          <CheckList results={shared} explanations={explanations} />
+        ) : (
+          <p className="mt-2 text-sm text-muted">No checklist-wide problems yet.</p>
+        )}
+        {advice?.overall_tip ? (
+          <div className="mt-3 rounded-lg border border-saffron bg-sky p-3">
+            <p className="text-sm font-semibold text-navy">Overall tip</p>
+            <p className="mt-1 text-sm text-ink">{advice.overall_tip}</p>
+            <p className="mt-2 text-sm text-muted">AI-written advice – always confirm with the official e-Sevai portal</p>
+          </div>
+        ) : null}
       </section>
       <ul className="flex flex-col gap-4" data-required-count={slots.length}>
         {slots.map((slot, index) => (
@@ -195,6 +290,7 @@ export function ChecklistBoard({
                 onActivity={() => refreshChecks()}
                 onSuspend={() => suspend(uploads[slot.id]?.id ?? null)}
                 onUndoSuspend={undoSuspend}
+                explanations={explanations}
                 onChange={(next) => {
                   setUploads((current) => ({ ...current, [slot.id]: next }));
                 }}
@@ -207,6 +303,25 @@ export function ChecklistBoard({
         <button type="button" className="btn-primary" onClick={() => void refreshChecks()} disabled={checking}>
           {checking ? "Checking…" : "Re-run checks"}
         </button>
+        <div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void explainIssues()}
+            disabled={explaining || problems.length === 0}
+          >
+            {explaining ? "Writing a simple explanation…" : "Explain issues in simple words"}
+          </button>
+          {adviceError ? <p className="mt-2 text-sm text-ink">{adviceError}</p> : null}
+          {adviceError ? (
+            <button type="button" className="btn-secondary mt-2" onClick={() => void explainIssues()}>
+              Retry
+            </button>
+          ) : null}
+          {advice ? (
+            <p className="mt-2 text-sm text-muted">AI-written advice – always confirm with the official e-Sevai portal</p>
+          ) : null}
+        </div>
         <div>
           <button
             type="button"

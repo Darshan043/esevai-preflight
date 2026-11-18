@@ -1,5 +1,6 @@
 // Talks to the FastAPI backend. The URL comes from the frontend env file.
 
+import type { AiAdvice } from "@/lib/ai";
 import type { PreviewLink, PublicUpload, ValidationResult } from "@/lib/types";
 
 export type DocumentResult = {
@@ -230,6 +231,69 @@ async function readValidation(response: Response): Promise<ValidationPayload> {
       warning: Number(summary.warning) || 0,
       fail: Number(summary.fail) || 0,
     },
+  };
+}
+
+export async function extractDocument(
+  documentId: string,
+  accessToken: string,
+  force = false,
+): Promise<Record<string, unknown>> {
+  const suffix = force ? "?force=true" : "";
+  const response = await authRequest(`/documents/${documentId}/extract${suffix}`, accessToken, { method: "POST" });
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  return body;
+}
+
+export async function explainApplication(
+  applicationId: string,
+  accessToken: string,
+  language: "en" | "ta",
+): Promise<AiAdvice> {
+  const response = await authRequest(`/applications/${applicationId}/explain`, accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language }),
+  });
+  return readAdvice(response);
+}
+
+export async function fetchAiAdvice(applicationId: string, accessToken: string): Promise<AiAdvice | null> {
+  const response = await authRequest(`/applications/${applicationId}/ai-advice`, accessToken, { method: "GET" });
+  if (response.status === 200 && (await response.clone().text()) === "null") {
+    return null;
+  }
+  return readAdvice(response);
+}
+
+async function readAdvice(response: Response): Promise<AiAdvice> {
+  const body = await readBody(response);
+  if (response.status === 401) {
+    throw new ApiError(401, "Please sign in again.", body);
+  }
+  const detail = typeof body.detail === "string" ? body.detail : "";
+  if (!response.ok) {
+    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+  }
+  const items = Array.isArray(body.items)
+    ? body.items.filter(
+        (item): item is { id: string; explanation: string } =>
+          !!item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string" && typeof (item as { explanation?: unknown }).explanation === "string",
+      )
+    : [];
+  return {
+    language: typeof body.language === "string" ? body.language : null,
+    generated_at: typeof body.generated_at === "string" ? body.generated_at : null,
+    model: typeof body.model === "string" ? body.model : null,
+    items,
+    overall_tip: typeof body.overall_tip === "string" ? body.overall_tip : null,
   };
 }
 

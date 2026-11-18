@@ -2,9 +2,9 @@
 
 from rapidfuzz import fuzz
 
+from app.validation.ai_fields import comparable_name
 from app.validation.defaults import NAME_MATCH_PASS, NAME_MATCH_WARN
 from app.validation.models import DocumentInput, Result
-from app.validation.text_extract import extract_name_candidate
 
 
 def check_name_consistency(documents: list[DocumentInput]) -> Result | None:
@@ -20,7 +20,7 @@ def check_name_consistency(documents: list[DocumentInput]) -> Result | None:
         rules = document.config.get("rules")
         if not isinstance(rules, dict) or rules.get("check_name_match") is not True:
             continue
-        name = extract_name_candidate(document.ocr_text_masked)
+        name = comparable_name(document)
         code = str(document.config.get("code") or "")
         if name and code:
             comparable.append((code, name))

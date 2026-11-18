@@ -16,6 +16,7 @@ from app.validation.defaults import (
     DEFAULT_MIN_WORDS,
     KEYWORD_MATCH,
 )
+from app.validation.ai_fields import ai_date_present, ai_name_present, iso_date, trusted_fields
 from app.validation.models import DocumentInput, Result
 from app.validation.text_extract import extract_dates, extract_name_candidate
 
@@ -187,7 +188,10 @@ def id_number_format(document: DocumentInput) -> Result | None:
 
 
 def date_validity(document: DocumentInput, today: date) -> Result | None:
-    """Use the newest date on the page when a maximum age is configured."""
+    """Use a trusted AI date when one exists. Otherwise use the newest OCR date."""
+    fields = trusted_fields(document)
+    if fields is not None:
+        return _ai_date_validity(document, fields, today)
     limit = _age_limit(document.config)
     if limit is None:
         return None
@@ -201,17 +205,48 @@ def date_validity(document: DocumentInput, today: date) -> Result | None:
             fix_suggestion="Make sure the issue date is visible, then read the document again.",
             details={"date_found": False},
         )
-    newest = max(dates)
-    if newest > today:
+    return _age_result(max(dates), today, limit)
+
+
+def _ai_date_validity(document: DocumentInput, fields: dict[str, object], today: date) -> Result | None:
+    """Judge dates from AI fields. A trusted reading does not fall back to OCR."""
+    issue = iso_date(fields.get("issue_date"))
+    expiry = iso_date(fields.get("expiry_date"))
+    limit = _age_limit(document.config)
+    if expiry is not None and expiry < today:
+        return Result(
+            check_code="date_validity",
+            check_name="Document date",
+            status="fail",
+            message="This document is past its expiry date.",
+            fix_suggestion="Upload a document that has not expired.",
+            details={"date_found": True, "expired": True},
+        )
+    if issue is not None and limit is not None:
+        return _age_result(issue, today, limit)
+    if limit is not None and issue is None:
+        return Result(
+            check_code="date_validity",
+            check_name="Document date",
+            status="warning",
+            message="We could not find the issue date.",
+            fix_suggestion="Make sure the issue date is visible, then read the document again.",
+            details={"date_found": False},
+        )
+    return None
+
+
+def _age_result(found: date, today: date, limit: int) -> Result:
+    if found > today:
         return Result(
             check_code="date_validity",
             check_name="Document date",
             status="warning",
             message="The date on this document is in the future.",
             fix_suggestion="Check that the date is fully visible and upload the page again.",
-            details={"future": True, "age_days": (newest - today).days},
+            details={"future": True, "age_days": (found - today).days},
         )
-    age = (today - newest).days
+    age = (today - found).days
     if age > limit:
         return Result(
             check_code="date_validity",
@@ -232,10 +267,16 @@ def date_validity(document: DocumentInput, today: date) -> Result | None:
 
 
 def _field_present(document: DocumentInput, code: str) -> bool:
-    if code == "date":
-        return bool(extract_dates(document.ocr_text_masked))
     if code == "name":
+        named = ai_name_present(document)
+        if named is True:
+            return True
         return extract_name_candidate(document.ocr_text_masked) is not None
+    if code == "date":
+        dated = ai_date_present(document)
+        if dated is True:
+            return True
+        return bool(extract_dates(document.ocr_text_masked))
     checks = document.quality_metrics.get("id_checks")
     if isinstance(checks, list) and checks:
         return True

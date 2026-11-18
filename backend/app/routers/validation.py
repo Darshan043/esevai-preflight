@@ -10,8 +10,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.ai.hygiene import clear_ai_advice
 from app.auth import CurrentUser, get_current_user
-from app.supabase_client import SupabaseRequestError, delete_rows, get_rows, insert_rows
+from app.supabase_client import SupabaseRequestError, delete_rows, get_rows, insert_rows, update_rows
 from app.validation.engine import validate_application
 from app.validation.models import DocumentInput, Result
 
@@ -79,7 +80,7 @@ def _load_inputs(application: dict[str, Any], user_id: str) -> tuple[list[dict[s
         {
             "application_id": f"eq.{application['id']}",
             "user_id": f"eq.{user_id}",
-            "select": "id,required_document_id,status,quality_metrics,ocr_text_masked",
+            "select": "id,required_document_id,status,quality_metrics,ocr_text_masked,extracted_fields",
         },
     )
     by_id = {str(row.get("id")): row for row in required}
@@ -90,6 +91,7 @@ def _load_inputs(application: dict[str, Any], user_id: str) -> tuple[list[dict[s
             continue
         metrics = upload.get("quality_metrics")
         text = upload.get("ocr_text_masked")
+        extracted = upload.get("extracted_fields")
         documents.append(
             DocumentInput(
                 document_id=str(upload.get("id") or ""),
@@ -97,6 +99,7 @@ def _load_inputs(application: dict[str, Any], user_id: str) -> tuple[list[dict[s
                 quality_metrics=metrics if isinstance(metrics, dict) else {},
                 ocr_text_masked=text if isinstance(text, str) else "",
                 status=str(upload.get("status") or ""),
+                extracted_fields=extracted if isinstance(extracted, dict) else {},
             )
         )
     return required, documents
@@ -144,6 +147,10 @@ def validate(application_id: str, user: CurrentUser = Depends(get_current_user))
     required, documents = _load_inputs(application, user.user_id)
     results = validate_application(required, documents)
     saved = _store_results(application_id, results)
+    try:
+        clear_ai_advice(application_id, reader=get_rows, writer=update_rows)
+    except Exception as exc:
+        logger.info("ai advice clear failed error_type=%s", type(exc).__name__)
     public = [_public_result(row) for row in saved]
     logger.info(
         "validation finished application=%s pass=%s warning=%s fail=%s",

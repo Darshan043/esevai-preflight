@@ -34,3 +34,4 @@ class DocumentInput:
     quality_metrics: dict[str, object]
     ocr_text_masked: str
     status: str
+    extracted_fields: dict[str, object] = field(default_factory=dict)

@@ -48,6 +48,7 @@ def _document(
     sort_order: int = 1,
     name_en: str | None = None,
     upload_id: str | None = None,
+    extracted_fields: dict[str, object] | None = None,
 ) -> DocumentInput:
     return DocumentInput(
         document_id=upload_id or f"upload-{code}",
@@ -66,6 +67,7 @@ def _document(
         quality_metrics=_metrics() if metrics is None else metrics,
         ocr_text_masked=text,
         status=status,
+        extracted_fields={} if extracted_fields is None else extracted_fields,
     )
 
 
@@ -249,6 +251,85 @@ def test_name_consistency_and_missing_documents() -> None:
     assert missing[0].status == "fail"
     assert missing[0].details == {"required_document_code": "photo"}
     assert missing[0].uploaded_document_id is None
+
+
+def test_ai_name_is_used_and_low_confidence_falls_back() -> None:
+    matched = check_name_consistency(
+        [
+            _document(
+                "address_proof",
+                text="Name: OTHER PERSON",
+                rules={"check_name_match": True},
+                extracted_fields={"holder_name": "Ravi Kumar", "extraction_confidence": "high"},
+            ),
+            _document(
+                "self_declaration",
+                text="Name: DIFFERENT NAME",
+                rules={"check_name_match": True},
+                extracted_fields={"holder_name": "Ravi Kumar", "extraction_confidence": "medium"},
+            ),
+        ]
+    )
+    assert matched is not None and matched.status == "pass"
+
+    fallback = check_name_consistency(
+        [
+            _document("address_proof", text="Name: Ravi Kumar", rules={"check_name_match": True}),
+            _document("self_declaration", text="Name: Ravi Kumar", rules={"check_name_match": True}),
+        ]
+    )
+    assert fallback is not None and fallback.status == "pass"
+
+    ignored = check_name_consistency(
+        [
+            _document(
+                "address_proof",
+                text="Name: Ravi Kumar",
+                rules={"check_name_match": True},
+                extracted_fields={"holder_name": "Completely Different", "extraction_confidence": "low"},
+            ),
+            _document("self_declaration", text="Name: Ravi Kumar", rules={"check_name_match": True}),
+        ]
+    )
+    assert ignored is not None and ignored.status == "pass"
+    named = required_fields(
+        _document(
+            "address_proof",
+            text="no name line",
+            fields=["name"],
+            extracted_fields={"holder_name": "Ravi Kumar", "extraction_confidence": "high"},
+        )
+    )
+    assert named[0].status == "pass" and named[0].details["present"] is True
+
+
+def test_ai_expiry_fails_and_empty_fields_stay_on_the_heuristic() -> None:
+    expired = date_validity(
+        _document(
+            "address_proof",
+            text="No date here",
+            extracted_fields={"expiry_date": "2020-01-01", "extraction_confidence": "high"},
+        ),
+        TODAY,
+    )
+    assert expired is not None and expired.status == "fail"
+    assert expired.details.get("expired") is True
+
+    unchanged = date_validity(
+        _document("address_proof", validity_days=3650, extracted_fields={}),
+        TODAY,
+    )
+    assert unchanged is not None and unchanged.status == "pass"
+
+    blurry = image_quality(
+        _document(
+            "photo",
+            metrics=_metrics(blur_score=1),
+            keywords={"en": [], "ta": []},
+            extracted_fields={"holder_name": "Ravi Kumar", "extraction_confidence": "high"},
+        )
+    )
+    assert blurry is not None and blurry.status == "fail"
 
 
 def test_engine_status_order_and_privacy() -> None:

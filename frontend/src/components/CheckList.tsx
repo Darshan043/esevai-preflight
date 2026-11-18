@@ -20,7 +20,7 @@ function CheckIcon({ status }: { status: ValidationResult["status"] }) {
   return <CircleX aria-hidden="true" className="h-4 w-4 text-red-700" />;
 }
 
-function CheckRow({ result }: { result: ValidationResult }) {
+function CheckRow({ result, explanation }: { result: ValidationResult; explanation?: string }) {
   return (
     <li className="rounded-md border border-line bg-white p-3">
       <p className="flex items-center gap-2 text-sm font-semibold text-navy">
@@ -31,11 +31,18 @@ function CheckRow({ result }: { result: ValidationResult }) {
       {result.status !== "pass" && result.fix_suggestion ? (
         <p className="mt-1 text-sm text-muted">What to do: {result.fix_suggestion}</p>
       ) : null}
+      {explanation ? <p className="mt-1 text-sm text-ink">{explanation}</p> : null}
     </li>
   );
 }
 
-export function CheckList({ results }: { results: ValidationResult[] }) {
+export function CheckList({
+  results,
+  explanations,
+}: {
+  results: ValidationResult[];
+  explanations?: Record<string, string>;
+}) {
   if (results.length === 0) {
     return null;
   }
@@ -47,7 +54,11 @@ export function CheckList({ results }: { results: ValidationResult[] }) {
       <h3 className="text-sm font-semibold text-navy">Checks</h3>
       <ul className="mt-2 flex flex-col gap-2">
         {problems.map((result) => (
-          <CheckRow key={result.id || `${result.check_code}-${result.message}`} result={result} />
+          <CheckRow
+            key={result.id || `${result.check_code}-${result.message}`}
+            result={result}
+            explanation={explanations?.[result.id]}
+          />
         ))}
       </ul>
       {passed.length > 0 ? (

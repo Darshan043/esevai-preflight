@@ -29,6 +29,7 @@ SECRET_PATH = "secret/do-not-return.jpg"
 @pytest.fixture(autouse=True)
 def _restore_pillow_limit():
     # One loader test lowers Pillow's bomb limit. Put the normal limit back afterwards.
+    Image.MAX_IMAGE_PIXELS = settings.OCR_MAX_PIXELS
     yield
     Image.MAX_IMAGE_PIXELS = settings.OCR_MAX_PIXELS
 

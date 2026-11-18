@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 8 complete – document validation engine
+Step 9 complete – AI integration
 
 ## Authentication
 
@@ -46,7 +46,7 @@ Next.js `src/proxy.ts` refreshes the session and sends visitors who are not sign
 The FastAPI backend checks the access token on `GET /me` and `GET /admin/ping`. It accepts HS256 tokens signed with `SUPABASE_JWT_SECRET` and ES256/RS256 tokens checked against the project JWKS. If those checks cannot be completed, it asks Supabase Auth to accept or reject the token. The role comes from the `profiles` table, not from the browser. New accounts are `citizen`. An admin is created only by `supabase/scripts/promote_admin.sql`. Admins can open `/admin`. Citizens see an access-denied page.
 
 Frontend env names: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `MAX_UPLOAD_MB`.
+Backend env names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `MAX_UPLOAD_MB`, `GEMINI_API_KEY`, `GEMINI_MODEL`. The Gemini key stays in `backend/.env` and is never sent to the browser. At deployment, set `GEMINI_API_KEY` and `GEMINI_MODEL` in Render as well.
 
 ## Uploads
 
@@ -87,9 +87,24 @@ Checks:
 
 If a rule key is missing, the defaults are: blur below 100 fails, a blank page fails, a small photo warns, brightness outside 40–220 warns, OCR confidence below 40 warns, and tilt above 15 degrees warns.
 
-Name and date reading is a best guess from labels and simple patterns. Step 9 will improve it with AI. The readiness score and report are Step 10.
+Name and date reading uses a trusted Gemini extraction when one is saved. Otherwise it stays a best guess from labels and simple patterns. Gemini never changes a pass or fail result. The readiness score and report are Step 10.
 
 `POST /applications/{id}/validate` replaces saved results. `GET /applications/{id}/validation` reads them. Both require the owner.
+
+## AI assistance
+
+Gemini does two jobs. It reads one document's already-masked OCR text into a small set of fields, and it rewrites warning and fail messages into short English or Tamil sentences. The rule engine remains the authority for every check.
+
+What is sent:
+
+- Masked OCR for one document, cut off at 6,000 characters, inside a data tag the model is told not to obey
+- Check code, status, short message, fix suggestion, and the document's display name
+
+What is not sent: storage paths, user ids, email addresses, file bytes, images, or unmasked ID numbers.
+
+Limits: one call waits `AI_TIMEOUT_SECONDS` (default 30). A reply is capped by `AI_MAX_OUTPUT_TOKENS` (default 800). The smoke test uses its own 1,024-token cap. Each person may make `AI_MAX_CALLS_PER_USER_PER_DAY` calls (default 80). The count is kept in memory and resets when the server restarts. Set `AI_ENABLED=false` to turn the AI routes off without stopping uploads or checks.
+
+The model name comes only from `GEMINI_MODEL` (default `gemini-3.8-flash`). See [docs/ai-design.md](docs/ai-design.md).
 
 ## Database
 

@@ -6,12 +6,15 @@ import { LoaderCircle } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AiDetailsPanel } from "@/components/AiDetails";
 import { CheckList } from "@/components/CheckList";
 import { StatusBadge } from "@/components/StatusBadge";
+import { visibleAiDetails } from "@/lib/ai";
 import {
   ApiError,
   NETWORK_ERROR,
   deleteUploadedDocument,
+  extractDocument,
   fetchPreviewUrl,
   isPublicUpload,
   processDocument,
@@ -113,6 +116,7 @@ export function UploadSlot({
   document,
   upload,
   results,
+  explanations,
   onChange,
   onActivity,
   onSuspend,
@@ -122,6 +126,7 @@ export function UploadSlot({
   document: SlotDocument;
   upload: PublicUpload | null;
   results: ValidationResult[];
+  explanations?: Record<string, string>;
   onChange: (next: PublicUpload | null) => void;
   onActivity?: () => void | Promise<void>;
   onSuspend?: () => void;
@@ -140,6 +145,8 @@ export function UploadSlot({
   const [removedId, setRemovedId] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [processError, setProcessError] = useState<string | null>(null);
+  const [aiReading, setAiReading] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [phase, setPhase] = useState<ReplacementPhase>("idle");
   const abortRef = useRef<AbortController | null>(null);
   const ignoreRef = useRef(false);
@@ -301,6 +308,32 @@ export function UploadSlot({
     void readDocument(current, operation);
   }
 
+  async function readAiDetails(current: PublicUpload, token: string, operation: number, force = false) {
+    setAiReading(true);
+    setAiNotice(null);
+    try {
+      const fields = await extractDocument(current.id, token, force);
+      if (!isCurrent(operation)) {
+        return;
+      }
+      onChange({ ...current, extracted_fields: fields });
+    } catch (caught) {
+      if (!isCurrent(operation)) {
+        return;
+      }
+      const turnedOff = caught instanceof ApiError && caught.message === "AI assistance is turned off.";
+      setAiNotice(
+        turnedOff
+          ? "AI assistance is turned off."
+          : "AI assistance is unavailable right now – your standard checks still work",
+      );
+    } finally {
+      if (isCurrent(operation)) {
+        setAiReading(false);
+      }
+    }
+  }
+
   async function readDocument(current: PublicUpload, operation: number) {
     const token = await accessToken();
     if (!isCurrent(operation)) {
@@ -320,20 +353,29 @@ export function UploadSlot({
     setProcessError(null);
     setMessage(null);
     setPhase("reading");
-    onChange({ ...current, status: "processing", quality_metrics: {}, ocr_text_masked: null });
+    setAiNotice(null);
+    onChange({ ...current, status: "processing", quality_metrics: {}, ocr_text_masked: null, extracted_fields: {} });
     try {
       const result = await processDocument(current.id, token, controller.signal);
       if (!isCurrent(operation) || ignoreRef.current) {
         return;
       }
-      onChange({
+      const readUpload: PublicUpload = {
         ...current,
         status: result.status,
         updated_at: result.updated_at || current.updated_at,
         quality_metrics: result.quality_metrics ?? {},
         ocr_text_masked: result.ocr_text_masked,
-      });
+        extracted_fields: {},
+      };
+      onChange(readUpload);
       setProcessError(null);
+      if (result.status === "processed") {
+        await readAiDetails(readUpload, token, operation);
+      }
+      if (!isCurrent(operation)) {
+        return;
+      }
       setPhase("checking");
       await onActivity?.();
       if (!isCurrent(operation)) {
@@ -452,6 +494,12 @@ export function UploadSlot({
     <div className="mt-4">
       <div className="mb-3" aria-live="polite">
         {showCurrent ? <StatusBadge status={status} /> : null}
+        {aiReading ? (
+          <p className="flex items-center gap-2 text-sm text-ink" role="status">
+            <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-royal" />
+            AI is reading the details…
+          </p>
+        ) : null}
         {phaseLabel ? (
           <p className="flex items-center gap-2 text-sm text-ink" role="status">
             <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-royal" />
@@ -619,7 +667,40 @@ export function UploadSlot({
       {shown && shown.status === "processed" && (showCurrent || phase === "checking") ? (
         <QualityPanel metrics={shown.quality_metrics ?? {}} text={shown.ocr_text_masked ?? null} />
       ) : null}
-      {showCurrent && shown ? <CheckList results={results.filter((result) => result.uploaded_document_id === shown.id)} /> : null}
+      {aiNotice ? (
+        <div className="mt-3" role="status">
+          <p className="text-sm text-ink">{aiNotice}</p>
+          {shown ? (
+            <button
+              type="button"
+              className="btn-secondary mt-2"
+              onClick={() => {
+                void (async () => {
+                  const token = await accessToken();
+                  if (!token || !shown) {
+                    return;
+                  }
+                  await readAiDetails(shown, token, operationRef.current, true);
+                })();
+              }}
+            >
+              Try AI again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {showCurrent && shown
+        ? (() => {
+            const details = visibleAiDetails(shown.extracted_fields);
+            return details ? <AiDetailsPanel details={details} /> : null;
+          })()
+        : null}
+      {showCurrent && shown ? (
+        <CheckList
+          results={results.filter((result) => result.uploaded_document_id === shown.id)}
+          explanations={explanations}
+        />
+      ) : null}
       {previewUrl ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/70 p-4" role="dialog" aria-modal="true" aria-label="Document preview">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg bg-white p-4">

@@ -85,6 +85,7 @@ async function Checklist({ params }: { params: Promise<{ id: string }> }) {
       slots={slots}
       results={results}
       language={language}
+      serviceSlug={service.slug}
     />
   );
 }

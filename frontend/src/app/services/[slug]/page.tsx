@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { startNewCheck } from "@/app/services/[slug]/actions";
+import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { Disclaimer } from "@/components/Disclaimer";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -44,6 +45,7 @@ async function ServiceDetail({
 
   return (
     <>
+      <BackLink href="/services">Back to services</BackLink>
       <header className="page-banner">
         <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Service details</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-navy">{pickName(service, language)}</h1>

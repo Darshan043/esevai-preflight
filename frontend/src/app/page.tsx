@@ -6,7 +6,6 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { HomeActions } from "@/components/HomeActions";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PageContainer } from "@/components/PageContainer";
-import { SystemStatus } from "@/components/SystemStatus";
 import { getRequestLanguage, listServices } from "@/lib/catalog";
 import { pickName } from "@/lib/language";
 
@@ -164,11 +163,6 @@ export default function Home() {
             </p>
           </article>
           <Disclaimer />
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">System status</h2>
-          <SystemStatus />
         </section>
       </PageContainer>
     </>

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { BackLink } from "@/components/BackLink";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PageContainer } from "@/components/PageContainer";
@@ -24,11 +25,14 @@ async function ReportBody({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <ReadinessReport
-      applicationId={result.data.application.id}
-      serviceName={result.data.service}
-      language={language}
-    />
+    <>
+      <BackLink href={`/applications/${result.data.application.id}`}>Back to application</BackLink>
+      <ReadinessReport
+        applicationId={result.data.application.id}
+        serviceName={result.data.service}
+        language={language}
+      />
+    </>
   );
 }
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { BackLink } from "@/components/BackLink";
 import { DeleteApplicationButton } from "@/components/DeleteApplicationButton";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
@@ -10,6 +11,7 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PageBanner } from "@/components/PageBanner";
 import { PageContainer } from "@/components/PageContainer";
 import { getRequestLanguage, listMyApplications } from "@/lib/catalog";
+import { formatStartedAt } from "@/lib/dates";
 import { pickName } from "@/lib/language";
 import { LABEL_COPY } from "@/lib/report";
 import { getUserAndProfile } from "@/lib/supabase/server";
@@ -50,7 +52,7 @@ async function ApplicationList({ searchParams }: { searchParams: Promise<{ error
                     {item.status === "checked" ? "Checked" : "Draft"}
                   </p>
                 </div>
-                <p className="mt-3 text-sm text-ink">Started {item.created_at.slice(0, 10)}</p>
+                <p className="mt-3 text-sm text-ink">Started {formatStartedAt(item.created_at)}</p>
                 {item.readiness_score != null && item.label ? (
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink">
                     <span>Score {item.readiness_score}</span>
@@ -91,8 +93,9 @@ export default function ApplicationsPage({
 }) {
   return (
     <PageContainer>
+      <BackLink href="/dashboard">Back to dashboard</BackLink>
       <PageBanner kicker="Your account" title="My applications">
-        Open a draft or start again from the service list.
+        Each card is a separate document check, even when the service name is the same.
       </PageBanner>
       <Suspense fallback={<LoadingSkeleton label="Loading applications" />}>
         <ApplicationList searchParams={searchParams} />

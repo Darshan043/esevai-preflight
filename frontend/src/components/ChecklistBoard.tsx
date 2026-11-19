@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { BackLink } from "@/components/BackLink";
 import { Card } from "@/components/Card";
 import { CheckList } from "@/components/CheckList";
 import { Disclaimer } from "@/components/Disclaimer";
@@ -35,6 +36,7 @@ export function ChecklistBoard({
   slots,
   results,
   language = "en",
+  serviceSlug = null,
 }: {
   applicationId: string;
   title: string;
@@ -42,6 +44,7 @@ export function ChecklistBoard({
   slots: ChecklistSlot[];
   results: ValidationResult[];
   language?: Language;
+  serviceSlug?: string | null;
 }) {
   const router = useRouter();
   const [uploads, setUploads] = useState<Record<string, PublicUpload | null>>(() => {
@@ -263,6 +266,12 @@ export function ChecklistBoard({
 
   return (
     <>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        <BackLink href="/applications">Back to My applications</BackLink>
+        {serviceSlug ? (
+          <BackLink href={`/services/${serviceSlug}`}>Back to required documents</BackLink>
+        ) : null}
+      </div>
       <header className="page-banner flex flex-col gap-3">
         <p className="text-xs font-semibold tracking-[0.14em] text-royal uppercase">Document checklist</p>
         <h1 className="text-3xl font-semibold tracking-tight text-navy">{title}</h1>

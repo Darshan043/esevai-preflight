@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { FooterAuth } from "@/components/FooterAuth";
 
 export function SiteFooter() {
   return (
@@ -19,26 +19,7 @@ export function SiteFooter() {
         <div>
           <p className="text-sm font-semibold text-white">Pages</p>
           <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              <Link href="/" className="underline-offset-2 hover:text-white hover:underline">
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link href="/services" className="underline-offset-2 hover:text-white hover:underline">
-                Services
-              </Link>
-            </li>
-            <li>
-              <Link href="/login" className="underline-offset-2 hover:text-white hover:underline">
-                Login
-              </Link>
-            </li>
-            <li>
-              <Link href="/signup" className="underline-offset-2 hover:text-white hover:underline">
-                Create account
-              </Link>
-            </li>
+            <FooterAuth />
           </ul>
         </div>
         <div>

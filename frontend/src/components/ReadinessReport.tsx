@@ -354,7 +354,7 @@ export function ReadinessReport({
       ) : null}
       <div className="flex flex-col gap-3 print:hidden sm:flex-row sm:flex-wrap">
         <Link href={`/applications/${applicationId}`} className="btn-secondary">
-          Back to checklist
+          Back to application
         </Link>
         <button type="button" className="btn-primary" onClick={() => void recheck()} disabled={generating}>
           {generating ? "Checking…" : "Re-check"}

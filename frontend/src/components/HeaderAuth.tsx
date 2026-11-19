@@ -1,156 +1,102 @@
 "use client";
 
-// Reads the session after the page is in the browser.
-// The first render always shows the logged-out links so prerender stays stable.
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SignOutButton } from "@/components/SignOutButton";
-import { parseLanguage, writeLanguageCookie, type Language } from "@/lib/language";
+import { headerAudience, headerNavLinks } from "@/lib/nav";
 import { createClient } from "@/lib/supabase/client";
+import type { Language } from "@/lib/language";
 
-type HeaderState = "logged-out" | "logged-in";
+type AuthView = "logged-out" | "logged-in";
 
-const linkClass = "nav-link inline-flex";
-
-function isCurrent(href: string, pathname: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
-}
-
-export function HeaderAuth({ initialLanguage }: { initialLanguage: Language }) {
-  const [state, setState] = useState<HeaderState>("logged-out");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [profileLanguage, setProfileLanguage] = useState<Language | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const language = profileLanguage ?? initialLanguage;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSession() {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase.auth.getUser();
-        if (cancelled) {
-          return;
-        }
-        if (error || !data.user) {
-          setIsAdmin(false);
-          setUserId(null);
-          setState("logged-out");
-          return;
-        }
-
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role, preferred_language")
-          .eq("id", data.user.id)
-          .maybeSingle();
-        if (cancelled) {
-          return;
-        }
-        // A failed profile read must not show the admin link.
-        setIsAdmin(!profileError && profile?.role === "admin");
-        setUserId(data.user.id);
-        setState("logged-in");
-        const savedLanguage = parseLanguage(profile?.preferred_language);
-        if (!profileError && profile?.preferred_language && savedLanguage !== initialLanguage) {
-          writeLanguageCookie(savedLanguage);
-          setProfileLanguage(savedLanguage);
-        }
-      } catch {
-        if (!cancelled) {
-          setIsAdmin(false);
-          setUserId(null);
-          setState("logged-out");
-        }
-      }
-    }
-
-    void loadSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [initialLanguage]);
+export function HeaderAuth({
+  initialLanguage,
+  initialSignedIn = false,
+  initialIsAdmin = false,
+  initialUserId = null,
+}: {
+  initialLanguage: Language;
+  initialSignedIn?: boolean;
+  initialIsAdmin?: boolean;
+  initialUserId?: string | null;
+}) {
+  const [state, setState] = useState<AuthView>(initialSignedIn ? "logged-in" : "logged-out");
+  const [isAdmin, setIsAdmin] = useState(initialIsAdmin);
+  const [userId, setUserId] = useState<string | null>(initialUserId);
+  const [language, setLanguage] = useState<Language>(initialLanguage);
 
   useEffect(() => {
     const supabase = createClient();
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") {
+    let cancelled = false;
+
+    async function applyUser(nextUserId: string | null) {
+      if (cancelled) {
+        return;
+      }
+      if (!nextUserId) {
         setIsAdmin(false);
         setUserId(null);
+        setLanguage(initialLanguage);
         setState("logged-out");
-        setMenuOpen(false);
+        return;
       }
+      setUserId(nextUserId);
+      setState("logged-in");
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role, preferred_language")
+        .eq("id", nextUserId)
+        .maybeSingle();
+      if (cancelled) {
+        return;
+      }
+      setIsAdmin(!profileError && profile?.role === "admin");
+      setLanguage(
+        profile?.preferred_language === "ta" || profile?.preferred_language === "en"
+          ? profile.preferred_language
+          : initialLanguage,
+      );
+    }
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applyUser(session?.user?.id ?? null);
     });
+
+    void supabase.auth.getUser().then(({ data: userData }) => {
+      void applyUser(userData.user?.id ?? null);
+    });
+
     return () => {
+      cancelled = true;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [initialLanguage]);
 
-  const signedIn = state === "logged-in";
-  const pathname = usePathname();
+  const audience = headerAudience(state === "logged-in", isAdmin);
+  const links = headerNavLinks(audience);
 
   return (
     <>
-      <button
-        type="button"
-        className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-white md:hidden"
-        aria-expanded={menuOpen}
-        aria-controls="site-menu"
-        onClick={() => setMenuOpen((open) => !open)}
-      >
-        {menuOpen ? <X aria-hidden="true" className="h-5 w-5" /> : <Menu aria-hidden="true" className="h-5 w-5" />}
-        {menuOpen ? "Close" : "Menu"}
-      </button>
-      <div
-        id="site-menu"
-        className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 py-2 md:flex md:flex-row md:items-center md:gap-3 md:py-0`}
-      >
-        <nav className="flex flex-col gap-1 md:mr-auto md:flex-row md:items-center" aria-label="Main">
-          <Link href="/" className={linkClass} aria-current={isCurrent("/", pathname) ? "page" : undefined}>
-            Home
+      {links.map((item) => (
+        <Link key={item.href} href={item.href} className="nav-link">
+          {item.label}
+        </Link>
+      ))}
+      {state === "logged-in" ? (
+        <SignOutButton className="nav-link" />
+      ) : (
+        <>
+          <Link href="/login" className="nav-link">
+            Login
           </Link>
-          <Link href="/services" className={linkClass} aria-current={isCurrent("/services", pathname) ? "page" : undefined}>
-            Services
+          <Link href="/signup" className="btn-primary">
+            Sign up
           </Link>
-          {signedIn ? (
-            <Link href="/applications" className={linkClass} aria-current={isCurrent("/applications", pathname) ? "page" : undefined}>
-              My applications
-            </Link>
-          ) : null}
-          {signedIn ? (
-            <Link href="/dashboard" className={linkClass} aria-current={isCurrent("/dashboard", pathname) ? "page" : undefined}>
-              Dashboard
-            </Link>
-          ) : null}
-          {signedIn && isAdmin ? (
-            <Link href="/admin" className={linkClass} aria-current={isCurrent("/admin", pathname) ? "page" : undefined}>
-              Admin
-            </Link>
-          ) : null}
-        </nav>
-        <LanguageToggle language={language} userId={userId} />
-        <div className="flex flex-wrap items-center gap-2">
-          {signedIn ? (
-            <SignOutButton />
-          ) : (
-            <>
-              <Link href="/login" className={linkClass} aria-current={isCurrent("/login", pathname) ? "page" : undefined}>
-                Login
-              </Link>
-              <Link href="/signup" className="btn-primary" aria-current={isCurrent("/signup", pathname) ? "page" : undefined}>
-                Sign up
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
+        </>
+      )}
+      <LanguageToggle userId={userId} language={language} />
     </>
   );
 }

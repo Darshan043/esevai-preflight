@@ -8,13 +8,25 @@ import { FileText } from "lucide-react";
 
 import { HeaderAuth } from "@/components/HeaderAuth";
 import { LANGUAGE_COOKIE, parseLanguage } from "@/lib/language";
+import { getUserAndProfile } from "@/lib/supabase/server";
 
 async function HeaderWithLanguage() {
   // Wait until the real request so the language cookie is not read during prerender.
   await connection();
   const store = await cookies();
   const language = parseLanguage(store.get(LANGUAGE_COOKIE)?.value);
-  return <HeaderAuth key={language} initialLanguage={language} />;
+  const current = await getUserAndProfile();
+  const profileLanguage = current?.profile?.preferred_language === "ta" ? "ta" : language;
+  const trustedAdmin = Boolean(current && !current.profileError && current.profile?.role === "admin");
+  return (
+    <HeaderAuth
+      key={`${profileLanguage}-${current?.userId ?? "out"}`}
+      initialLanguage={profileLanguage}
+      initialSignedIn={Boolean(current)}
+      initialIsAdmin={trustedAdmin}
+      initialUserId={current?.userId ?? null}
+    />
+  );
 }
 
 export function SiteHeader() {
@@ -56,7 +68,7 @@ export function SiteHeader() {
       </div>
       <div className="bg-navy text-white">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-1.5 sm:px-6">
-          <Suspense fallback={<HeaderAuth key="en" initialLanguage="en" />}>
+          <Suspense fallback={<span className="sr-only">Loading account menu</span>}>
             <HeaderWithLanguage />
           </Suspense>
         </div>

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { BackLink } from "@/components/BackLink";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -8,6 +9,15 @@ import { PageContainer } from "@/components/PageContainer";
 import { ServiceCatalog } from "@/components/ServiceCatalog";
 import { getRequestLanguage, listServices } from "@/lib/catalog";
 import { pickName } from "@/lib/language";
+import { getUserAndProfile } from "@/lib/supabase/server";
+
+async function ServicesBack() {
+  const current = await getUserAndProfile();
+  if (!current) {
+    return null;
+  }
+  return <BackLink href="/dashboard">Back to dashboard</BackLink>;
+}
 
 async function ServiceList() {
   const [language, result] = await Promise.all([getRequestLanguage(), listServices()]);
@@ -37,6 +47,9 @@ async function ServiceList() {
 export default function ServicesPage() {
   return (
     <PageContainer>
+      <Suspense fallback={null}>
+        <ServicesBack />
+      </Suspense>
       <PageBanner kicker="Service catalogue" title="Services">
         Choose a service and check the documents you will need.
       </PageBanner>

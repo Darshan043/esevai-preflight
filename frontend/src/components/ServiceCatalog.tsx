@@ -67,12 +67,9 @@ export function ServiceCatalog({ items }: { items: ServiceCardItem[] }) {
                     Draft list – confirm on the official portal
                   </p>
                 )}
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4">
                   <Link href={`/services/${service.slug}`} className="btn-primary">
-                    Start document check
-                  </Link>
-                  <Link href={`/services/${service.slug}`} className="btn-secondary">
-                    View details
+                    View required documents
                   </Link>
                 </div>
               </Card>

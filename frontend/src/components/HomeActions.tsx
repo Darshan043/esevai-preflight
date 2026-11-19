@@ -18,8 +18,8 @@ export async function HomeActions() {
         Check Your Documents
       </Link>
       {current ? (
-        <Link href="/applications" className={secondaryClass}>
-          My applications
+        <Link href="/dashboard" className={secondaryClass}>
+          Open dashboard
         </Link>
       ) : (
         <Link href="/signup" className={secondaryClass}>

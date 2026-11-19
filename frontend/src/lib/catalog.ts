@@ -6,6 +6,7 @@ import { connection } from "next/server";
 import { LANGUAGE_COOKIE, parseLanguage, type Language } from "@/lib/language";
 import { createClient, getUserAndProfile } from "@/lib/supabase/server";
 import { isReadinessLabel } from "@/lib/report";
+import { uniqueById } from "@/lib/unique";
 import type {
   Application,
   ReadinessLabel,
@@ -155,27 +156,29 @@ export async function listMyApplications(): Promise<{
       return { items: [], error: friendlyError };
     }
 
-    const items = (data ?? []).map((row) => {
-      const service = Array.isArray(row.services) ? row.services[0] : row.services;
-      const required = Array.isArray(service?.required_documents) ? service.required_documents : [];
-      const activeIds = new Set(
-        required.filter((document) => document.is_active).map((document) => document.id),
-      );
-      const uploads = Array.isArray(row.uploaded_documents) ? row.uploaded_documents : [];
-      return {
-        id: row.id,
-        status: row.status,
-        readiness_score: row.readiness_score,
-        label: labelFromSummary(row.summary),
-        created_at: row.created_at,
-        serviceName: {
-          name_en: service?.name_en ?? "Service",
-          name_ta: service?.name_ta ?? null,
-        },
-        uploadedCount: uploads.filter((upload) => activeIds.has(upload.required_document_id)).length,
-        requiredCount: activeIds.size,
-      };
-    });
+    const items = uniqueById(
+      (data ?? []).map((row) => {
+        const service = Array.isArray(row.services) ? row.services[0] : row.services;
+        const required = Array.isArray(service?.required_documents) ? service.required_documents : [];
+        const activeIds = new Set(
+          required.filter((document) => document.is_active).map((document) => document.id),
+        );
+        const uploads = Array.isArray(row.uploaded_documents) ? row.uploaded_documents : [];
+        return {
+          id: row.id,
+          status: row.status,
+          readiness_score: row.readiness_score,
+          label: labelFromSummary(row.summary),
+          created_at: row.created_at,
+          serviceName: {
+            name_en: service?.name_en ?? "Service",
+            name_ta: service?.name_ta ?? null,
+          },
+          uploadedCount: uploads.filter((upload) => activeIds.has(upload.required_document_id)).length,
+          requiredCount: activeIds.size,
+        };
+      }),
+    );
     return { items, error: null };
   } catch {
     return { items: [], error: friendlyError };
@@ -221,7 +224,7 @@ function labelFromSummary(summary: unknown): ReadinessLabel | null {
 
 export type ChecklistData = {
   application: Pick<Application, "id" | "status" | "readiness_score">;
-  service: Pick<Service, "name_en" | "name_ta" | "description">;
+  service: Pick<Service, "name_en" | "name_ta" | "description" | "slug">;
   documents: RequiredDocument[];
   uploads: UploadedDocument[];
   results: ValidationResult[];
@@ -235,7 +238,7 @@ export async function getChecklist(applicationId: string): Promise<{
     const supabase = await client();
     const { data, error } = await supabase
       .from("applications")
-      .select("id, status, readiness_score, service_id, services(name_en, name_ta, description)")
+      .select("id, status, readiness_score, service_id, services(name_en, name_ta, description, slug)")
       .eq("id", applicationId)
       .maybeSingle();
 

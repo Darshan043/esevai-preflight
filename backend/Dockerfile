@@ -1,4 +1,5 @@
 # FastAPI image with Tesseract (eng+tam) and Poppler. One uvicorn worker.
+# Render sets PORT and terminates HTTPS in front of this process.
 FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /build
@@ -32,9 +33,13 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TESSERACT_CMD= \
-    POPPLER_PATH=
+    POPPLER_PATH= \
+    OMP_THREAD_LIMIT=1
 
 USER appuser
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8000'), timeout=5)"
+
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

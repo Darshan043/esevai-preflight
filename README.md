@@ -240,6 +240,15 @@ docker compose down
 
 Build the backend image from `backend/Dockerfile`. Set the production variable names in the Render dashboard (see [docs/deployment-env-checklist.md](docs/deployment-env-checklist.md)). Do not bake `backend/.env` into the image. Use `ENVIRONMENT=production` and an `https` `ALLOWED_ORIGINS` list. One uvicorn worker is required because rate limits and the daily AI cap live in process memory. The frontend may stay on Vercel; if you also run the frontend image, rebuild it whenever `NEXT_PUBLIC_API_URL` changes.
 
+## Live deployment
+
+Fill these in after the first successful deploy. Demo credentials are shared privately, not in the repo.
+
+- Frontend: `<LIVE_FRONTEND_URL>`
+- API: `<LIVE_API_URL>`
+
+Follow [docs/deployment-guide.md](docs/deployment-guide.md) steps 1–7. Record owner tests in [docs/test-log.md](docs/test-log.md). `NEXT_PUBLIC_*` names are inlined at build time; change them only with a Vercel redeploy.
+
 ## Errors, limits, and retention
 
 Every API error is `{"error":{"code","message","request_id"}}`. Validation errors may also include `fields`. The browser still understands the older `{"detail": "..."}` shape.

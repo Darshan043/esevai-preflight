@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 12 complete – integration and error handling. API errors use one JSON shape with a request id. Production refuses to start with missing or unsafe settings. Uploads, processing, checks, reports, and admin writes are rate-limited in memory. A dry-run cleanup tool can count (and optionally delete) unused applications. The browser times out slow calls, retries GET once, and resumes a stalled document read.
+Step 13 complete – Docker images for the frontend and backend. Supabase and Gemini stay outside the containers. The backend image includes Tesseract (`eng` and `tam`) and Poppler. Secrets are injected at run time and are never copied into image layers.
 
 ## Authentication
 
@@ -191,6 +191,54 @@ npm run dev
 ```
 
 Open http://localhost:3000 while the backend is running on port 8000.
+
+## Docker
+
+Requires Docker Desktop with Linux containers (Engine 29+ and Compose v2). Do not copy `.env` files into an image.
+
+### Environment
+
+- Backend secrets stay in `backend/.env` (gitignored). Compose loads that file at **run** time.
+- Frontend public names stay in `frontend/.env.local`. Pass them at **build** time with `--env-file frontend/.env.local`.
+- For local Compose, keep `ENVIRONMENT=development` so localhost origins are allowed.
+- `NEXT_PUBLIC_API_URL` must be the URL the **browser** uses (`http://localhost:8000` locally), not `http://backend:8000`.
+- The service-role key must never be a frontend build-arg.
+
+### Build and start
+
+From the repository root:
+
+```powershell
+docker compose --env-file frontend/.env.local up --build
+```
+
+Detached:
+
+```powershell
+docker compose --env-file frontend/.env.local up --build -d
+```
+
+### URLs
+
+- Frontend: http://localhost:3000
+- Backend health: http://localhost:8000/health
+- Backend ready: http://localhost:8000/health/ready
+
+### Logs and stop
+
+```powershell
+docker compose logs -f
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose stop
+docker compose down
+```
+
+`down` stops and removes the containers. Images stay until you run `docker compose down --rmi local`.
+
+### Render
+
+Build the backend image from `backend/Dockerfile`. Set the production variable names in the Render dashboard (see [docs/deployment-env-checklist.md](docs/deployment-env-checklist.md)). Do not bake `backend/.env` into the image. Use `ENVIRONMENT=production` and an `https` `ALLOWED_ORIGINS` list. One uvicorn worker is required because rate limits and the daily AI cap live in process memory. The frontend may stay on Vercel; if you also run the frontend image, rebuild it whenever `NEXT_PUBLIC_API_URL` changes.
 
 ## Errors, limits, and retention
 

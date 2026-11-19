@@ -31,4 +31,5 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 10 – readiness report: deterministic score and label, next steps, printable report page, score badge on My applications
 - [x] Step 11 – admin dashboard: service and checklist management, aggregate statistics
 - [x] Step 12 – integration and error handling: consistent errors, safe logging, production checks, rate limits, retention, frontend resilience
+- [x] Step 13 – Docker: backend image with Tesseract eng+tam and Poppler, frontend production image, Compose for local Linux containers
 - [ ] Two-column application workspace – implemented (documents left, sticky readiness panel right; single column below `lg`). Browser verification still pending.

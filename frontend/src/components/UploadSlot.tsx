@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { AiDetailsPanel } from "@/components/AiDetails";
 import { CheckList } from "@/components/CheckList";
 import { StatusBadge } from "@/components/StatusBadge";
-import { extractFailureMessage, visibleAiDetails } from "@/lib/ai";
+import { EMPTY_OCR_AI_MESSAGE, extractFailureMessage, visibleAiDetails } from "@/lib/ai";
 import {
   ApiError,
   NETWORK_ERROR,
@@ -321,11 +321,13 @@ export function UploadSlot({
       if (!isCurrent(operation)) {
         return;
       }
-      setAiNotice(
-        caught instanceof ApiError
-          ? extractFailureMessage(caught.status, caught.message)
-          : "AI assistance is unavailable right now – your standard checks still work",
-      );
+      if (caught instanceof ApiError) {
+        setAiNotice(extractFailureMessage(caught.status, caught.message));
+      } else if (caught instanceof Error && caught.message === NETWORK_ERROR) {
+        setAiNotice(NETWORK_ERROR);
+      } else {
+        setAiNotice("AI assistance is unavailable right now – your standard checks still work");
+      }
     } finally {
       if (isCurrent(operation)) {
         setAiReading(false);
@@ -370,7 +372,11 @@ export function UploadSlot({
       onChange(readUpload);
       setProcessError(null);
       if (result.status === "processed") {
-        await readAiDetails(readUpload, token, operation);
+        if (readUpload.ocr_text_masked && readUpload.ocr_text_masked.trim()) {
+          await readAiDetails(readUpload, token, operation);
+        } else {
+          setAiNotice(EMPTY_OCR_AI_MESSAGE);
+        }
       }
       if (!isCurrent(operation)) {
         return;

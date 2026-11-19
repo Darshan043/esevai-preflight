@@ -61,6 +61,8 @@ export const PROVIDER_QUOTA_MESSAGE =
   "AI assistance is temporarily unavailable due to the provider's quota. Standard checks still work.";
 export const EXTRACT_PARSE_MESSAGE =
   "AI could not read the details from this document. Your standard checks still work. You can try AI again.";
+export const EMPTY_OCR_AI_MESSAGE =
+  "This document has no readable text for AI yet. Standard checks still work.";
 const GENERIC_UNAVAILABLE = "AI assistance is unavailable right now – your standard checks still work";
 const PROVIDER_UNAVAILABLE = "AI assistance is unavailable right now. Your standard checks still work.";
 const PROVIDER_BUSY_EXTRACT = "AI assistance is busy right now. Please try again in a little while.";
@@ -90,6 +92,9 @@ export function extractFailureMessage(status: number, detail: string): string {
   }
   if (status === 429) {
     return PROVIDER_BUSY_MESSAGE;
+  }
+  if (status === 409) {
+    return detail === "Read the document first" ? "Read the document first, then try AI again." : detail || EMPTY_OCR_AI_MESSAGE;
   }
   if (detail === PROVIDER_QUOTA_MESSAGE) {
     return PROVIDER_QUOTA_MESSAGE;

@@ -273,6 +273,11 @@ def test_extract_rejects_unread_and_failed_ai(monkeypatch: pytest.MonkeyPatch) -
     unread = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
     assert unread.status_code == 409
     assert unread.json()["detail"] == "Read the document first"
+    store.document["status"] = "processed"
+    store.document["ocr_text_masked"] = "   "
+    empty = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
+    assert empty.status_code == 409
+    assert empty.json()["detail"] == "This document has no readable text for AI yet. Standard checks still work."
     stranger = client.post(f"/documents/{DOC_ID}/extract", headers=_auth("99999999-9999-9999-9999-999999999999"))
     assert stranger.status_code == 404
 

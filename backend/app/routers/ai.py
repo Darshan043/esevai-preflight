@@ -126,8 +126,13 @@ async def extract_document(
     _off()
     row = _owned_document(document_id, user.user_id)
     text = row.get("ocr_text_masked")
-    if row.get("status") != "processed" or not isinstance(text, str) or not text.strip():
+    if row.get("status") != "processed":
         raise HTTPException(status_code=409, detail="Read the document first")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(
+            status_code=409,
+            detail="This document has no readable text for AI yet. Standard checks still work.",
+        )
     cached = None if force else _cached(row.get("extracted_fields"), row.get("updated_at"))
     if cached is not None:
         return _public_fields(cached)
@@ -149,6 +154,7 @@ async def extract_document(
     )
     model = (settings.GEMINI_MODEL or "").strip() or "gemini-3.8-flash"
     started = time.perf_counter()
+    logger.info("gemini extract start document=%s model=%s", document_id, model)
     try:
         raw, usage = await run_in_threadpool(complete_json, system, prompt)
         parsed = parse_extraction(raw)

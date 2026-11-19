@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   DAILY_AI_LIMIT_MESSAGE,
+  EMPTY_OCR_AI_MESSAGE,
   EXTRACT_PARSE_MESSAGE,
   PROVIDER_BUSY_MESSAGE,
   PROVIDER_QUOTA_MESSAGE,
@@ -68,6 +69,11 @@ describe("AI details and advice", () => {
   });
 
   it("shows a parse error without collapsing other extract messages", () => {
+    assert.equal(
+      extractFailureMessage(409, "Read the document first"),
+      "Read the document first, then try AI again.",
+    );
+    assert.equal(extractFailureMessage(409, EMPTY_OCR_AI_MESSAGE), EMPTY_OCR_AI_MESSAGE);
     assert.equal(extractFailureMessage(502, EXTRACT_PARSE_MESSAGE), EXTRACT_PARSE_MESSAGE);
     assert.equal(extractFailureMessage(503, "AI assistance is turned off."), "AI assistance is turned off.");
     assert.equal(extractFailureMessage(503, PROVIDER_QUOTA_MESSAGE), PROVIDER_QUOTA_MESSAGE);

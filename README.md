@@ -244,7 +244,7 @@ Build the backend image from `backend/Dockerfile`. Set the production variable n
 
 Fill these in after the first successful deploy. Demo credentials are shared privately, not in the repo.
 
-- Frontend: `<LIVE_FRONTEND_URL>`
+- Frontend: `<https://esevai-preflight.vercel.app/>`
 - API: `<LIVE_API_URL>`
 
 Follow [docs/deployment-guide.md](docs/deployment-guide.md) steps 1–7. Record owner tests in [docs/test-log.md](docs/test-log.md). `NEXT_PUBLIC_*` names are inlined at build time; change them only with a Vercel redeploy.

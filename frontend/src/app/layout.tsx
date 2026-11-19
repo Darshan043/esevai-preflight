@@ -3,6 +3,7 @@ import { Noto_Sans, Noto_Sans_Tamil } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <SiteHeader />
         </Suspense>
+        <OfflineBanner />
         <div id="content" className="flex-1">{children}</div>
         <SiteFooter />
       </body>

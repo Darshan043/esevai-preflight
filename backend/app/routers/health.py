@@ -2,9 +2,12 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.limits.ratelimit import limit_ready_ip
+from app.ready import ready_body
 
 router = APIRouter()
 
@@ -20,3 +23,10 @@ def health() -> dict[str, str]:
         "environment": settings.ENVIRONMENT,
         "time": current_time,
     }
+
+
+@router.get("/health/ready")
+def ready(_: None = Depends(limit_ready_ip)) -> JSONResponse:
+    """Database, storage, and OCR. Tamil OCR is optional."""
+    status, body = ready_body()
+    return JSONResponse(status_code=status, content=body)

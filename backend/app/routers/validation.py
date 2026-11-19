@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.ai.hygiene import clear_ai_advice
 from app.auth import CurrentUser, get_current_user
+from app.limits.ratelimit import require_validate_report_user
+from app.request_context import get_request_id
 from app.supabase_client import SupabaseRequestError, delete_rows, get_rows, insert_rows, update_rows
 from app.validation.engine import validate_application
 from app.validation.models import DocumentInput, Result
@@ -152,8 +154,8 @@ def run_and_store_validation(application_id: str, user_id: str) -> dict[str, Any
         logger.info("ai advice clear failed error_type=%s", type(exc).__name__)
     public = [_public_result(row) for row in saved]
     logger.info(
-        "validation finished application=%s pass=%s warning=%s fail=%s",
-        application_id,
+        "validation finished request_id=%s pass=%s warning=%s fail=%s",
+        get_request_id(),
         sum(1 for row in public if row.get("status") == "pass"),
         sum(1 for row in public if row.get("status") == "warning"),
         sum(1 for row in public if row.get("status") == "fail"),
@@ -168,7 +170,7 @@ def run_and_store_validation(application_id: str, user_id: str) -> dict[str, Any
 
 
 @router.post("/applications/{application_id}/validate")
-def validate(application_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
+def validate(application_id: str, user: CurrentUser = Depends(require_validate_report_user)) -> dict[str, Any]:
     """Replace this application's check results. Does not score the application."""
     payload = run_and_store_validation(application_id, user.user_id)
     return {

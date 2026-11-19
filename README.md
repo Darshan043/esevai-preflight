@@ -21,7 +21,7 @@ Checks whether a citizen's documents are complete and readable before they are s
 
 ## Status
 
-Step 11 complete – admin dashboard. Admins can add, edit, duplicate, and activate services, manage each service's required documents and rules, and see aggregate usage statistics. Citizens never see inactive services in the catalogue.
+Step 12 complete – integration and error handling. API errors use one JSON shape with a request id. Production refuses to start with missing or unsafe settings. Uploads, processing, checks, reports, and admin writes are rate-limited in memory. A dry-run cleanup tool can count (and optionally delete) unused applications. The browser times out slow calls, retries GET once, and resumes a stalled document read.
 
 ## Authentication
 
@@ -138,6 +138,8 @@ Signed-in admins open `/admin` for usage totals (users, applications, reports, a
 
 Invalid rules cannot be saved. The Step 8 engine reads this configuration at runtime. See [docs/admin-guide.md](docs/admin-guide.md).
 
+The overview page can preview data retention. `POST /admin/cleanup` defaults to a dry run and returns counts only.
+
 Offline demo (no database):
 
 ```powershell
@@ -189,3 +191,28 @@ npm run dev
 ```
 
 Open http://localhost:3000 while the backend is running on port 8000.
+
+## Errors, limits, and retention
+
+Every API error is `{"error":{"code","message","request_id"}}`. Validation errors may also include `fields`. The browser still understands the older `{"detail": "..."}` shape.
+
+`GET /health` is a liveness check. `GET /health/ready` checks the database, storage, and OCR. Tamil OCR is optional. In production, `/docs` is off unless `ENABLE_DOCS=true`.
+
+Rate limits live in this process and reset on restart. Defaults: 30 uploads/hour, 60 process/hour, 60 validate-or-report/hour, 120 admin writes/hour, 30 `/health/ready` calls/minute per IP.
+
+Count unused applications (dry run):
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\cleanup_old_data.py
+```
+
+Owner-run smoke test (does not create rows):
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\e2e_smoke.py --selftest
+.\.venv\Scripts\python.exe scripts\e2e_smoke.py
+```
+
+Production variable names are listed in [docs/deployment-env-checklist.md](docs/deployment-env-checklist.md). Do not put secret values in that file.

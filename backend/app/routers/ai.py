@@ -19,6 +19,7 @@ from app.ai.hygiene import with_ai_advice
 from app.ai.limits import reserve_call
 from app.auth import CurrentUser, get_current_user
 from app.config import settings
+from app.request_context import get_request_id
 from app.supabase_client import SupabaseRequestError, get_rows, update_rows
 
 logger = logging.getLogger(__name__)
@@ -154,14 +155,14 @@ async def extract_document(
     )
     model = (settings.GEMINI_MODEL or "").strip() or "gemini-3.8-flash"
     started = time.perf_counter()
-    logger.info("gemini extract start document=%s model=%s", document_id, model)
+    logger.info("gemini extract start request_id=%s model=%s", get_request_id(), model)
     try:
         raw, usage = await run_in_threadpool(complete_json, system, prompt)
         parsed = parse_extraction(raw)
     except AIUnavailableError as exc:
         logger.warning(
-            "Gemini document extraction failed document=%s model=%s ms=%s category=%s http_status=%s",
-            document_id,
+            "Gemini document extraction failed request_id=%s model=%s ms=%s category=%s http_status=%s",
+            get_request_id(),
             model,
             int((time.perf_counter() - started) * 1000),
             exc.category,
@@ -170,8 +171,8 @@ async def extract_document(
         raise _unavailable(exc) from None
     except ExtractionParseError as exc:
         logger.warning(
-            "Gemini document extraction failed document=%s model=%s ms=%s category=parse http_status=502 rule=%s",
-            document_id,
+            "Gemini document extraction failed request_id=%s model=%s ms=%s category=parse http_status=502 rule=%s",
+            get_request_id(),
             model,
             int((time.perf_counter() - started) * 1000),
             exc.rule,
@@ -190,15 +191,15 @@ async def extract_document(
         update_rows("uploaded_documents", {"id": f"eq.{document_id}"}, {"extracted_fields": stored})
     except SupabaseRequestError:
         logger.warning(
-            "Gemini document extraction failed document=%s model=%s ms=%s category=save http_status=502",
-            document_id,
+            "Gemini document extraction failed request_id=%s model=%s ms=%s category=save http_status=502",
+            get_request_id(),
             model,
             int((time.perf_counter() - started) * 1000),
         )
         raise HTTPException(status_code=502, detail=_UNAVAILABLE) from None
     logger.info(
-        "gemini extract document=%s model=%s ms=%s prompt_tokens=%s output_tokens=%s status=ok",
-        document_id,
+        "gemini extract request_id=%s model=%s ms=%s prompt_tokens=%s output_tokens=%s status=ok",
+        get_request_id(),
         model,
         int((time.perf_counter() - started) * 1000),
         usage["prompt_tokens"],
@@ -239,8 +240,8 @@ async def explain_application(
         parsed = parse_explanations(raw, {str(item["id"]) for item in items})
     except AIUnavailableError as exc:
         logger.info(
-            "gemini explain application=%s model=%s ms=%s status=%s",
-            application_id,
+            "gemini explain request_id=%s model=%s ms=%s status=%s",
+            get_request_id(),
             model,
             int((time.perf_counter() - started) * 1000),
             exc.category,
@@ -248,8 +249,8 @@ async def explain_application(
         raise _explain_unavailable(exc) from None
     except ExplanationParseError:
         logger.info(
-            "gemini explain application=%s model=%s ms=%s status=parse",
-            application_id,
+            "gemini explain request_id=%s model=%s ms=%s status=parse",
+            get_request_id(),
             model,
             int((time.perf_counter() - started) * 1000),
         )
@@ -271,8 +272,8 @@ async def explain_application(
     except SupabaseRequestError:
         raise HTTPException(status_code=502, detail=_UNAVAILABLE) from None
     logger.info(
-        "gemini explain application=%s model=%s ms=%s prompt_tokens=%s output_tokens=%s status=ok",
-        application_id,
+        "gemini explain request_id=%s model=%s ms=%s prompt_tokens=%s output_tokens=%s status=ok",
+        get_request_id(),
         model,
         int((time.perf_counter() - started) * 1000),
         usage["prompt_tokens"],

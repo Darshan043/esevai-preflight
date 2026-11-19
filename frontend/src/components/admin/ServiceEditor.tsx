@@ -84,6 +84,9 @@ export function ServiceEditor({ serviceId }: { serviceId?: string }) {
 
   async function saveService(event: FormEvent) {
     event.preventDefault();
+    if (busy) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setFieldErrors([]);

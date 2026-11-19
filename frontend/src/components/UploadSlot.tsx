@@ -3,7 +3,7 @@
 // One checklist slot: choose a file, upload it, then preview, replace, or delete it.
 
 import { LoaderCircle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AiDetailsPanel } from "@/components/AiDetails";
@@ -20,8 +20,9 @@ import {
   processDocument,
   uploadUrl,
 } from "@/lib/api";
+import { mapApiError, newRequestId } from "@/lib/api-errors";
 import { metricsAfterReadFailure, replacementLabel, showStoredResults, type ReplacementPhase } from "@/lib/replacement";
-import { slotStatus } from "@/lib/slot-status";
+import { shouldAutoResume, slotStatus } from "@/lib/slot-status";
 import { createClient } from "@/lib/supabase/client";
 import type { PublicUpload, ValidationResult } from "@/lib/types";
 
@@ -201,6 +202,9 @@ export function UploadSlot({
   }
 
   function startUpload(file: File, replacing: boolean) {
+    if (phase === "uploading" || progress !== null) {
+      return;
+    }
     if (replacing) {
       const confirmed = window.confirm("Replace the current file? The old file will be removed.");
       if (!confirmed) {
@@ -242,6 +246,7 @@ export function UploadSlot({
     requestRef.current = xhr;
     xhr.open("POST", uploadUrl(applicationId, document.id));
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("X-Request-ID", newRequestId());
     xhr.upload.onprogress = (event) => {
       if (!isCurrent(operation) || !event.lengthComputable) {
         return;
@@ -273,8 +278,8 @@ export function UploadSlot({
       }
       if (xhr.status < 200 || xhr.status >= 300) {
         try {
-          const parsed = JSON.parse(xhr.responseText) as { detail?: string };
-          failUpload(operation, parsed.detail || `The backend returned status ${xhr.status}.`);
+          const parsed = JSON.parse(xhr.responseText) as Record<string, unknown>;
+          failUpload(operation, mapApiError(xhr.status, parsed).message);
         } catch {
           failUpload(operation, `The backend returned status ${xhr.status}.`);
         }
@@ -301,6 +306,9 @@ export function UploadSlot({
   }
 
   function startRead(current: PublicUpload) {
+    if (reading || phase === "reading" || phase === "uploading") {
+      return;
+    }
     const operation = nextOperation();
     ignoreRef.current = true;
     abortRef.current?.abort();
@@ -426,6 +434,19 @@ export function UploadSlot({
       }
     }
   }
+
+  const resumeKey = shown ? `${shown.id}:${shown.status}:${shown.updated_at}` : "";
+  useEffect(() => {
+    if (!shown || reading || phase !== "idle") {
+      return;
+    }
+    if (!shouldAutoResume(shown.status, shown.updated_at)) {
+      return;
+    }
+    startRead(shown);
+    // Resume once per leftover uploaded or stalled processing row after a reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeKey]);
 
   function ignoreReading() {
     ignoreRef.current = true;

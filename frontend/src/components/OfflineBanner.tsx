@@ -1,0 +1,30 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export function OfflineBanner() {
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    function sync() {
+      setOffline(!navigator.onLine);
+    }
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  if (!offline) {
+    return null;
+  }
+
+  return (
+    <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950 print:hidden" role="status">
+      You appear to be offline. Some actions will not work until the connection returns.
+    </p>
+  );
+}

@@ -1,6 +1,7 @@
 // Talks to the FastAPI backend. The URL comes from the frontend env file.
 
 import type { AiAdvice } from "@/lib/ai";
+import { DEFAULT_TIMEOUT_MS, LONG_TIMEOUT_MS, TIMEOUT_ERROR, mapApiError, newRequestId, redirectToLogin } from "@/lib/api-errors";
 import type {
   AdminChecksPage,
   AdminDocument,
@@ -66,86 +67,115 @@ export class ApiError extends Error {
   status: number;
   body: Record<string, unknown> | null;
   fieldErrors: AdminFieldError[];
+  requestId: string | null;
+  code: string | null;
 
   constructor(
     status: number,
     message: string,
     body: Record<string, unknown> | null = null,
     fieldErrors: AdminFieldError[] = [],
+    requestId: string | null = null,
+    code: string | null = null,
   ) {
     super(message);
     this.status = status;
     this.body = body;
     this.fieldErrors = fieldErrors;
+    this.requestId = requestId;
+    this.code = code;
+  }
+}
+
+function failFrom(status: number, body: Record<string, unknown> | null): ApiError {
+  const mapped = mapApiError(status, body);
+  if (status === 401) {
+    redirectToLogin();
+    return new ApiError(401, "Please sign in again.", body, mapped.fields, mapped.requestId, mapped.code);
+  }
+  return new ApiError(status, mapped.message, body, mapped.fields, mapped.requestId, mapped.code);
+}
+
+type TimedInit = RequestInit & { timeoutMs?: number };
+
+function mergeAbort(timeoutMs: number, external?: AbortSignal | null): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  if (external) {
+    if (external.aborted) {
+      controller.abort();
+    } else {
+      external.addEventListener("abort", onAbort, { once: true });
+    }
+  }
+  return {
+    signal: controller.signal,
+    cancel: () => {
+      clearTimeout(timer);
+      external?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
+async function once(path: string, init: TimedInit, accessToken?: string): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+  if (!headers.has("X-Request-ID")) {
+    headers.set("X-Request-ID", newRequestId());
+  }
+  const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const gated = mergeAbort(timeoutMs, init.signal);
+  try {
+    return await fetch(`${API_URL}${path}`, { ...init, headers, signal: gated.signal });
+  } catch (caught) {
+    if (caught instanceof DOMException && caught.name === "AbortError") {
+      if (init.signal?.aborted) {
+        throw caught;
+      }
+      throw new Error(TIMEOUT_ERROR);
+    }
+    throw new Error(NETWORK_ERROR);
+  } finally {
+    gated.cancel();
+  }
+}
+
+async function rawRequest(path: string, init: TimedInit, accessToken?: string): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  try {
+    return await once(path, init, accessToken);
+  } catch (caught) {
+    if (method === "GET" && caught instanceof Error && caught.message === NETWORK_ERROR) {
+      return once(path, init, accessToken);
+    }
+    throw caught;
   }
 }
 
 export async function fetchWithToken<T>(path: string, accessToken: string): Promise<T> {
   // Sends the Supabase access token. The backend checks it and loads the role.
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-  } catch {
-    throw new Error(NETWORK_ERROR);
-  }
-
-  if (response.status === 401) {
-    // Callers send the browser to /login. This file is not a React component.
-    throw new ApiError(401, "Please sign in again.");
-  }
-
+  const response = await rawRequest(path, { method: "GET" }, accessToken);
+  const body = await readBody(response);
   if (!response.ok) {
-    throw new Error(`The backend returned status ${response.status}.`);
+    throw failFrom(response.status, body);
   }
-
-  return (await response.json()) as T;
+  return body as T;
 }
 
 export async function getHealth(): Promise<HealthResponse> {
-  let response: Response;
-
-  try {
-    response = await fetch(`${API_URL}/health`);
-  } catch {
-    throw new Error(NETWORK_ERROR);
-  }
-
+  const response = await rawRequest("/health", { method: "GET" });
+  const body = await readBody(response);
   if (!response.ok) {
-    throw new Error(`The backend returned status ${response.status}.`);
+    throw failFrom(response.status, body);
   }
-
-  return (await response.json()) as HealthResponse;
+  return body as HealthResponse;
 }
 
-async function authRequest(path: string, accessToken: string, init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        ...(init.headers ?? {}),
-      },
-    });
-  } catch (caught) {
-    if (caught instanceof DOMException && caught.name === "AbortError") {
-      throw caught;
-    }
-    throw new Error(NETWORK_ERROR);
-  }
-}
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { detail?: string };
-    if (typeof body.detail === "string" && body.detail) {
-      return body.detail;
-    }
-  } catch {
-    // The body was not JSON. Use the status line below.
-  }
-  return `The backend returned status ${response.status}.`;
+async function authRequest(path: string, accessToken: string, init: TimedInit): Promise<Response> {
+  return rawRequest(path, init, accessToken);
 }
 
 export function uploadUrl(applicationId: string, requiredDocumentId: string): string {
@@ -154,22 +184,17 @@ export function uploadUrl(applicationId: string, requiredDocumentId: string): st
 
 export async function fetchPreviewUrl(documentId: string, accessToken: string): Promise<PreviewLink> {
   const response = await authRequest(`/documents/${documentId}/preview-url`, accessToken, { method: "GET" });
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.");
-  }
+  const body = await readBody(response);
   if (!response.ok) {
-    throw new ApiError(response.status, await readError(response));
+    throw failFrom(response.status, body);
   }
-  return (await response.json()) as PreviewLink;
+  return body as PreviewLink;
 }
 
 export async function deleteUploadedDocument(documentId: string, accessToken: string): Promise<void> {
   const response = await authRequest(`/documents/${documentId}`, accessToken, { method: "DELETE" });
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.");
-  }
   if (!response.ok) {
-    throw new ApiError(response.status, await readError(response));
+    throw failFrom(response.status, await readBody(response));
   }
 }
 
@@ -191,12 +216,8 @@ function isDocumentResult(value: Record<string, unknown>): value is DocumentResu
 
 async function readDocumentResult(response: Response): Promise<DocumentResult> {
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   if (!isDocumentResult(body)) {
     throw new Error("The server response could not be read.");
@@ -218,6 +239,7 @@ export async function processDocument(
   const response = await authRequest(`/documents/${documentId}/process`, accessToken, {
     method: "POST",
     signal,
+    timeoutMs: LONG_TIMEOUT_MS,
   });
   return readDocumentResult(response);
 }
@@ -233,12 +255,8 @@ function isValidationPayload(value: Record<string, unknown>): value is Validatio
 
 async function readValidation(response: Response): Promise<ValidationPayload> {
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   if (!isValidationPayload(body)) {
     throw new Error("The server response could not be read.");
@@ -261,14 +279,13 @@ export async function extractDocument(
   force = false,
 ): Promise<Record<string, unknown>> {
   const suffix = force ? "?force=true" : "";
-  const response = await authRequest(`/documents/${documentId}/extract${suffix}`, accessToken, { method: "POST" });
+  const response = await authRequest(`/documents/${documentId}/extract${suffix}`, accessToken, {
+    method: "POST",
+    timeoutMs: LONG_TIMEOUT_MS,
+  });
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   return body;
 }
@@ -282,6 +299,7 @@ export async function explainApplication(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language }),
+    timeoutMs: LONG_TIMEOUT_MS,
   });
   return readAdvice(response);
 }
@@ -296,12 +314,8 @@ export async function fetchAiAdvice(applicationId: string, accessToken: string):
 
 async function readAdvice(response: Response): Promise<AiAdvice> {
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   const items = Array.isArray(body.items)
     ? body.items.filter(
@@ -338,12 +352,8 @@ function isReadinessReport(value: unknown): value is ReadinessReport {
 
 async function readReportBody(response: Response): Promise<ReadinessReport> {
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   if (!isReadinessReport(body)) {
     throw new Error("The server response could not be read.");
@@ -359,12 +369,8 @@ export async function generateReport(applicationId: string, accessToken: string)
 export async function fetchReport(applicationId: string, accessToken: string): Promise<ReportPayload> {
   const response = await authRequest(`/applications/${applicationId}/report`, accessToken, { method: "GET" });
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
-  const detail = typeof body.detail === "string" ? body.detail : "";
   if (!response.ok) {
-    throw new ApiError(response.status, detail || `The backend returned status ${response.status}.`, body);
+    throw failFrom(response.status, body);
   }
   const report = isReadinessReport(body.report) ? body.report : null;
   return { report, is_current: body.is_current === true && report !== null };
@@ -372,56 +378,45 @@ export async function fetchReport(applicationId: string, accessToken: string): P
 
 export async function deleteApplicationOnServer(applicationId: string, accessToken: string): Promise<void> {
   const response = await authRequest(`/applications/${applicationId}`, accessToken, { method: "DELETE" });
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.");
-  }
   if (!response.ok) {
-    throw new ApiError(response.status, await readError(response));
+    throw failFrom(response.status, await readBody(response));
   }
 }
 
-function fieldErrorsFrom(body: Record<string, unknown>): AdminFieldError[] {
-  const detail = body.detail;
-  if (!Array.isArray(detail)) {
-    return [];
-  }
-  return detail
-    .filter((item): item is AdminFieldError => {
-      return !!item && typeof item === "object" && typeof (item as AdminFieldError).field === "string" && typeof (item as AdminFieldError).message === "string";
-    })
-    .map((item) => ({ field: item.field, message: item.message }));
-}
-
-function detailMessage(body: Record<string, unknown>, status: number): string {
-  if (typeof body.detail === "string" && body.detail) {
-    return body.detail;
-  }
-  const fields = fieldErrorsFrom(body);
-  if (fields[0]) {
-    return fields[0].message;
-  }
-  return `The backend returned status ${status}.`;
-}
-
-async function adminRequest<T>(path: string, accessToken: string, init: RequestInit = {}): Promise<T> {
+async function adminRequest<T>(path: string, accessToken: string, init: TimedInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     ...(init.body ? { "Content-Type": "application/json" } : {}),
   };
-  const response = await authRequest(path, accessToken, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
+  const response = await authRequest(path, accessToken, { ...init, headers: { ...headers, ...(init.headers as Record<string, string> | undefined) } });
   if (response.status === 204) {
     return undefined as T;
   }
   const body = await readBody(response);
-  if (response.status === 401) {
-    throw new ApiError(401, "Please sign in again.", body);
-  }
   if (response.status === 403) {
-    throw new ApiError(403, "Access denied.", body);
+    const mapped = mapApiError(403, body);
+    throw new ApiError(403, "Access denied.", body, mapped.fields, mapped.requestId, mapped.code);
   }
   if (!response.ok) {
-    throw new ApiError(response.status, detailMessage(body, response.status), body, fieldErrorsFrom(body));
+    throw failFrom(response.status, body);
   }
   return body as T;
+}
+
+export type CleanupSummary = {
+  dry_run: boolean;
+  days: number;
+  applications: number;
+  files: number;
+  deleted_applications: number;
+  deleted_files: number;
+  skipped_applications: number;
+};
+
+export async function runAdminCleanup(accessToken: string, dryRun = true): Promise<CleanupSummary> {
+  return adminRequest<CleanupSummary>("/admin/cleanup", accessToken, {
+    method: "POST",
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
 }
 
 export async function fetchAdminStats(accessToken: string, days: number): Promise<AdminStats> {

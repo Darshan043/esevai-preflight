@@ -224,6 +224,17 @@ def download_object(path: str) -> bytes:
     return response.content
 
 
+def ping_storage() -> None:
+    """Confirm the private documents bucket exists. Paths are not logged."""
+    base_url, service_key = _settings()
+    response = _send(
+        "GET",
+        f"{base_url}/storage/v1/bucket/{DOCUMENTS_BUCKET}",
+        _headers(service_key),
+    )
+    _raise_for_status(response, service_key)
+
+
 def delete_objects(paths: list[str]) -> None:
     """Delete storage objects. A path that is already gone is ignored."""
     cleaned = [path for path in paths if path]

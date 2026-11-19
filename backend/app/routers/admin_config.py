@@ -17,6 +17,7 @@ from app.admin.config_validation import (
     service_row,
 )
 from app.auth import CurrentUser, require_admin
+from app.limits.ratelimit import require_admin_write
 from app.supabase_client import (
     SupabaseRequestError,
     count_rows,
@@ -113,7 +114,7 @@ def list_services(_: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
 
 
 @router.post("/admin/services", status_code=201)
-def create_service(body: dict[str, Any], _: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
+def create_service(body: dict[str, Any], _: CurrentUser = Depends(require_admin_write)) -> dict[str, Any]:
     parsed, errors = parse_model(ServiceInput, body)
     if parsed is None:
         raise _http_errors(errors)
@@ -158,7 +159,7 @@ def read_service(service_id: str, _: CurrentUser = Depends(require_admin)) -> di
 
 
 @router.put("/admin/services/{service_id}")
-def update_service(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
+def update_service(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin_write)) -> dict[str, Any]:
     current = _load_service(service_id)
     parsed, errors = parse_model(ServiceInput, body)
     if parsed is None:
@@ -178,7 +179,7 @@ def update_service(service_id: str, body: dict[str, Any], _: CurrentUser = Depen
 
 
 @router.post("/admin/services/{service_id}/duplicate", status_code=201)
-def duplicate_service(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
+def duplicate_service(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin_write)) -> dict[str, Any]:
     current = _load_service(service_id)
     parsed, errors = parse_model(
         ServiceInput,
@@ -217,7 +218,7 @@ def duplicate_service(service_id: str, body: dict[str, Any], _: CurrentUser = De
 
 
 @router.delete("/admin/services/{service_id}", status_code=204)
-def delete_service(service_id: str, _: CurrentUser = Depends(require_admin)) -> None:
+def delete_service(service_id: str, _: CurrentUser = Depends(require_admin_write)) -> None:
     _load_service(service_id)
     if _application_count(service_id) > 0:
         raise _conflict("This service has been used – deactivate it instead")
@@ -228,7 +229,7 @@ def delete_service(service_id: str, _: CurrentUser = Depends(require_admin)) -> 
 
 
 @router.post("/admin/services/{service_id}/documents", status_code=201)
-def create_document(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
+def create_document(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin_write)) -> dict[str, Any]:
     _load_service(service_id)
     parsed, errors = parse_model(RequiredDocumentInput, body)
     if parsed is None:
@@ -256,7 +257,7 @@ def _load_document(required_document_id: str) -> dict[str, Any]:
 def update_document(
     required_document_id: str,
     body: dict[str, Any],
-    _: CurrentUser = Depends(require_admin),
+    _: CurrentUser = Depends(require_admin_write),
 ) -> dict[str, Any]:
     current = _load_document(required_document_id)
     parsed, errors = parse_model(RequiredDocumentInput, body)
@@ -277,7 +278,7 @@ def update_document(
 
 
 @router.delete("/admin/documents/{required_document_id}", status_code=204)
-def delete_document(required_document_id: str, _: CurrentUser = Depends(require_admin)) -> None:
+def delete_document(required_document_id: str, _: CurrentUser = Depends(require_admin_write)) -> None:
     _load_document(required_document_id)
     if _upload_count_for_document(required_document_id) > 0:
         raise _conflict("Documents have been uploaded for this item – deactivate it instead")
@@ -288,7 +289,7 @@ def delete_document(required_document_id: str, _: CurrentUser = Depends(require_
 
 
 @router.post("/admin/services/{service_id}/documents/reorder")
-def reorder_documents(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin)) -> dict[str, Any]:
+def reorder_documents(service_id: str, body: dict[str, Any], _: CurrentUser = Depends(require_admin_write)) -> dict[str, Any]:
     _load_service(service_id)
     ids = body.get("ids")
     if not isinstance(ids, list) or not ids or not all(isinstance(item, str) and item for item in ids):

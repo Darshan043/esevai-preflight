@@ -20,6 +20,7 @@ from app.processing.quality import measure_quality
 from fastapi.testclient import TestClient
 from tests.test_auth import _token
 from tests.test_documents import APP_ID, UPLOAD_ID, _auth, _cleared_shared_results, _install
+from tests.helpers import api_message
 from tests.test_documents import Store
 
 client = TestClient(app)
@@ -444,7 +445,7 @@ def test_process_failure_stores_a_friendly_error(monkeypatch: pytest.MonkeyPatch
     response = client.post(f"/documents/{UPLOAD_ID}/process", headers=_auth())
     assert response.status_code == 422
     assert "1234 5678" not in response.text
-    assert "clearer photo" in response.json()["detail"]
+    assert "clearer photo" in api_message(response)
     assert store.row is not None
     assert store.row["status"] == "failed"
     assert store.row["quality_metrics"] == {"error": "We could not read this document. Please try a clearer photo."}
@@ -457,7 +458,7 @@ def test_fresh_processing_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = _patch_pipeline(monkeypatch, store, {"quality_metrics": {}, "ocr_text_masked": ""})
     response = client.post(f"/documents/{UPLOAD_ID}/process", headers=_auth())
     assert response.status_code == 409
-    assert response.json()["detail"] == "Already processing"
+    assert api_message(response) == "Already processing"
     assert seen["downloads"] == 0
 
 

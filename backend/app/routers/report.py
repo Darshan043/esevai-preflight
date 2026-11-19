@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import CurrentUser, get_current_user
+from app.limits.ratelimit import require_validate_report_user
 from app.report.builder import build_report, is_report_current
 from app.report.hygiene import with_report
 from app.routers.validation import run_and_store_validation
@@ -59,7 +60,7 @@ def _public_report(value: object) -> dict[str, Any] | None:
 
 
 @router.post("/applications/{application_id}/report")
-def create_report(application_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
+def create_report(application_id: str, user: CurrentUser = Depends(require_validate_report_user)) -> dict[str, Any]:
     """Refresh checks, score them, save the report, and return it."""
     application = _owned_application(application_id, user.user_id)
     uploads = get_rows(

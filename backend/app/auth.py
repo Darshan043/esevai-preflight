@@ -179,6 +179,9 @@ def get_current_user(
     email = claims.get("email")
     full_name = profile.get("full_name")
     language = profile.get("preferred_language")
+    from app.logging_safe import remember_user
+
+    remember_user(user_id)
     return CurrentUser(
         user_id=user_id,
         email=email if isinstance(email, str) else None,

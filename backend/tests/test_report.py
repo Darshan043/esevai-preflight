@@ -17,6 +17,7 @@ from app.report.scoring import (
     score_one_document,
 )
 from app.supabase_client import SupabaseRequestError
+from tests.helpers import api_message
 from tests.test_auth import USER_ID, _token, _use_local_tokens
 from tests.test_documents import APP_ID, REQUIRED_ID, UPLOAD_ID, _auth, _install, _send
 from tests.test_documents import Store as DocStore
@@ -355,7 +356,7 @@ def test_report_without_uploads_is_400(monkeypatch: object) -> None:
     _install_report(monkeypatch, store)
     response = client.post(f"/applications/{APP_ID}/report", headers={"Authorization": f"Bearer {_token()}"})
     assert response.status_code == 400
-    assert "Upload at least one document first" in response.json()["detail"]
+    assert "Upload at least one document first" in api_message(response)
 
 
 def test_report_while_reading_is_409(monkeypatch: object) -> None:

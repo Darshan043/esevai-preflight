@@ -15,6 +15,9 @@ from fastapi.responses import JSONResponse, Response
 
 from app.ai.hygiene import clear_ai_advice
 from app.auth import CurrentUser, get_current_user
+from app.errors import error_response
+from app.limits.ratelimit import require_process_user, require_upload_user
+from app.request_context import get_request_id
 from app.report.hygiene import clear_stale_report
 from app.file_checks import allowed_bytes, read_upload, storage_path
 from app.processing.loader import DocumentUnreadableError
@@ -191,7 +194,7 @@ def _formats(document: dict[str, Any]) -> list[str]:
 async def upload_document(
     application_id: str,
     required_document_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_upload_user),
     file: UploadFile | None = File(default=None),
 ) -> dict[str, Any]:
     """Save one checklist file, or replace the file already in that slot."""
@@ -435,7 +438,7 @@ def _download_and_process(path: str, mime_type: str) -> dict[str, object]:
 @router.post("/documents/{document_id}/process")
 async def process_upload(
     document_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_process_user),
 ) -> JSONResponse:
     """Read one of the caller's files and store masked text plus quality numbers."""
     row = _owned_upload(document_id, user.user_id)
@@ -455,7 +458,7 @@ async def process_upload(
         failed = _save_failure(row, message)
         _after_document_change(str(row.get("application_id") or ""))
         body = _result_body(failed)
-        return JSONResponse(status_code=422, content={"detail": message, **body})
+        return error_response(422, message, extra=body)
 
     started = datetime.now(timezone.utc)
     try:
@@ -465,9 +468,9 @@ async def process_upload(
         failed = _save_failure(row, message)
         _clear_saved_checks(str(row.get("application_id") or ""), document_id)
         _after_document_change(str(row.get("application_id") or ""))
-        logger.info("ocr failed document=%s error_type=%s", document_id, type(exc).__name__)
+        logger.info("ocr failed request_id=%s error_type=%s", get_request_id(), type(exc).__name__)
         body = _result_body(failed)
-        return JSONResponse(status_code=422, content={"detail": message, **body})
+        return error_response(422, message, extra=body)
 
     raw_text = outcome.get("ocr_text_masked")
     masked_text, _count = mask_sensitive(raw_text if isinstance(raw_text, str) else "")
@@ -492,7 +495,7 @@ async def process_upload(
         failed = _save_failure(row, message)
         _after_document_change(str(row.get("application_id") or ""))
         body = _result_body(failed)
-        return JSONResponse(status_code=422, content={"detail": message, **body})
+        return error_response(422, message, extra=body)
 
     saved = updated[0] if updated else {
         **row,
@@ -503,7 +506,7 @@ async def process_upload(
     _clear_saved_checks(str(saved.get("application_id") or row.get("application_id") or ""), document_id)
     _after_document_change(str(saved.get("application_id") or row.get("application_id") or ""))
     elapsed_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
-    logger.info("ocr finished document=%s status=processed ms=%s", document_id, elapsed_ms)
+    logger.info("ocr finished request_id=%s status=processed ms=%s", get_request_id(), elapsed_ms)
     return JSONResponse(status_code=200, content=_result_body(saved))
 
 

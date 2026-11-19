@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     # When false, AI routes say assistance is turned off and the rest of the app still works.
     AI_ENABLED: bool = True
 
+    # Empty means: on in development, off in production.
+    ENABLE_DOCS: str = ""
+    # Applications unused for this many days can be removed by the cleanup tool.
+    DATA_RETENTION_DAYS: int = 30
+    RATE_LIMIT_UPLOADS_PER_HOUR: int = 30
+    RATE_LIMIT_PROCESS_PER_HOUR: int = 60
+    RATE_LIMIT_VALIDATE_REPORT_PER_HOUR: int = 60
+    RATE_LIMIT_ADMIN_WRITES_PER_HOUR: int = 120
+    RATE_LIMIT_READY_PER_MINUTE: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

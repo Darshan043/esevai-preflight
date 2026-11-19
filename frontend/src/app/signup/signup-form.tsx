@@ -17,6 +17,9 @@ export function SignupForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) {
+      return;
+    }
     setError(null);
     setInfo(null);
 

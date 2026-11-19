@@ -2,6 +2,15 @@
 
 import pytest
 
+from app.limits.ratelimit import limiter
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> None:
+    limiter.reset()
+    yield
+    limiter.reset()
+
 
 @pytest.fixture(autouse=True)
 def forbid_live_gemini(monkeypatch: pytest.MonkeyPatch) -> None:

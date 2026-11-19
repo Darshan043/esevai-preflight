@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ApiError, fetchAdminStats } from "@/lib/api";
+import { ApiError, fetchAdminStats, runAdminCleanup, type CleanupSummary } from "@/lib/api";
 import { getAccessToken } from "@/lib/access-token";
 import { STATS_FOOTNOTE } from "@/lib/admin-defaults";
 import type { AdminStats } from "@/lib/types";
@@ -204,7 +204,72 @@ export function OverviewDashboard() {
           {stats.capped ? <p className="text-sm text-saffron">These totals are capped at 5,000 recent rows.</p> : null}
         </>
       ) : null}
+      {!loading ? <RetentionPanel /> : null}
     </div>
+  );
+}
+
+function RetentionPanel() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<CleanupSummary | null>(null);
+
+  async function run(dryRun: boolean) {
+    if (busy) {
+      return;
+    }
+    if (!dryRun) {
+      const confirmed = window.confirm(
+        "Delete applications that have not been updated within the retention window? Storage files are removed first. This cannot be undone.",
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setError("Please sign in again.");
+        return;
+      }
+      setSummary(await runAdminCleanup(token, dryRun));
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : "The cleanup could not be run.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <h2 className="text-lg font-semibold text-navy">Data retention</h2>
+      <p className="mt-2 text-sm text-muted">
+        Count or remove applications that have not been updated within DATA_RETENTION_DAYS. The preview is always a
+        dry run. Counts only — no names, files, or paths are shown.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" className="btn-secondary" onClick={() => void run(true)} disabled={busy}>
+          {busy ? "Working…" : "Preview old applications"}
+        </button>
+        <button type="button" className="btn-secondary border-red-200 text-red-800" onClick={() => void run(false)} disabled={busy}>
+          Delete expired applications
+        </button>
+      </div>
+      {error ? <p className="mt-3 text-sm text-red-800">{error}</p> : null}
+      {summary ? (
+        <ul className="mt-3 text-sm text-ink">
+          <li>Mode: {summary.dry_run ? "dry run" : "applied"}</li>
+          <li>Days: {summary.days}</li>
+          <li>Applications: {summary.applications}</li>
+          <li>Files: {summary.files}</li>
+          <li>Deleted applications: {summary.deleted_applications}</li>
+          <li>Deleted files: {summary.deleted_files}</li>
+          <li>Skipped: {summary.skipped_applications}</li>
+        </ul>
+      ) : null}
+    </section>
   );
 }
 

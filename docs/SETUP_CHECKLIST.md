@@ -30,4 +30,5 @@ Store every secret outside the repo (a password manager or a local file that Git
 - [x] Step 9 – Gemini field extraction and plain-language explanations. Configured model: `gemini-3.5-flash-lite`. `GEMINI_API_KEY` and `GEMINI_MODEL` must also be set in Render at deployment (Step 14).
 - [x] Step 10 – readiness report: deterministic score and label, next steps, printable report page, score badge on My applications
 - [x] Step 11 – admin dashboard: service and checklist management, aggregate statistics
+- [x] Step 12 – integration and error handling: consistent errors, safe logging, production checks, rate limits, retention, frontend resilience
 - [ ] Two-column application workspace – implemented (documents left, sticky readiness panel right; single column below `lg`). Browser verification still pending.

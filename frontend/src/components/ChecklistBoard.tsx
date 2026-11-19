@@ -201,6 +201,9 @@ export function ChecklistBoard({
   }, [applicationId, results]);
 
   async function explainIssues() {
+    if (explaining) {
+      return;
+    }
     setExplaining(true);
     setAdviceError(null);
     try {
@@ -237,6 +240,9 @@ export function ChecklistBoard({
   }
 
   async function generateReadinessReport() {
+    if (generating) {
+      return;
+    }
     setGenerating(true);
     setReportError(null);
     try {

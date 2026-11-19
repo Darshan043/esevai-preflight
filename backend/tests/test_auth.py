@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from tests.helpers import api_message
 
 client = TestClient(app)
 TEST_SECRET = "test-only-hs256-secret-with-32bx"
@@ -55,7 +56,7 @@ def _use_local_tokens(monkeypatch: object, role: str | None) -> None:
 def test_me_without_token_is_401() -> None:
     response = client.get("/me")
     assert response.status_code == 401
-    assert "token" in response.json()["detail"].lower()
+    assert "token" in api_message(response).lower()
 
 
 def test_me_with_garbage_token_is_401(monkeypatch: object) -> None:

@@ -13,6 +13,7 @@ from app.ai.hygiene import with_ai_advice, without_ai_advice
 from app.ai.limits import reset_counts
 from app.config import settings
 from app.main import app
+from tests.helpers import api_message
 from tests.test_auth import USER_ID, _token, _use_local_tokens
 
 client = TestClient(app)
@@ -272,12 +273,12 @@ def test_extract_rejects_unread_and_failed_ai(monkeypatch: pytest.MonkeyPatch) -
     _install(monkeypatch, store)
     unread = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
     assert unread.status_code == 409
-    assert unread.json()["detail"] == "Read the document first"
+    assert api_message(unread) == "Read the document first"
     store.document["status"] = "processed"
     store.document["ocr_text_masked"] = "   "
     empty = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
     assert empty.status_code == 409
-    assert empty.json()["detail"] == "This document has no readable text for AI yet. Standard checks still work."
+    assert api_message(empty) == "This document has no readable text for AI yet. Standard checks still work."
     stranger = client.post(f"/documents/{DOC_ID}/extract", headers=_auth("99999999-9999-9999-9999-999999999999"))
     assert stranger.status_code == 404
 
@@ -288,7 +289,7 @@ def test_extract_rejects_unread_and_failed_ai(monkeypatch: pytest.MonkeyPatch) -
     assert failed.status_code == 502
     assert store.document["extracted_fields"] == {}
     assert KEY not in failed.text
-    assert failed.json()["detail"] == (
+    assert api_message(failed) == (
         "AI could not read the details from this document. Your standard checks still work. You can try AI again."
     )
 
@@ -307,7 +308,7 @@ def test_extract_failure_logs_category_and_status(monkeypatch: pytest.MonkeyPatc
     with caplog.at_level(logging.WARNING):
         failed = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
     assert failed.status_code == 503
-    assert failed.json()["detail"] == "AI assistance is unavailable right now. Your standard checks still work."
+    assert api_message(failed) == "AI assistance is unavailable right now. Your standard checks still work."
     assert store.document["extracted_fields"] == {}
     warning = _extraction_warning(caplog)
     assert warning.levelno == logging.WARNING
@@ -379,7 +380,7 @@ def test_ai_disabled_and_daily_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "AI_ENABLED", False)
     off = client.post(f"/documents/{DOC_ID}/extract", headers=_auth())
     assert off.status_code == 503
-    assert off.json()["detail"] == "AI assistance is turned off."
+    assert api_message(off) == "AI assistance is turned off."
     assert store.calls == 0
     monkeypatch.setattr(settings, "AI_ENABLED", True)
     monkeypatch.setattr(settings, "AI_MAX_CALLS_PER_USER_PER_DAY", 0)
@@ -458,14 +459,14 @@ def test_explain_distinguishes_rate_limit_quota_and_daily_limit(monkeypatch: pyt
     monkeypatch.setattr("app.routers.ai.complete_json", raise_category("rate limited"))
     busy = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
     assert busy.status_code == 429
-    assert busy.json()["detail"] == "AI is busy; try again after a short wait."
-    assert "quota" not in busy.json()["detail"]
+    assert api_message(busy) == "AI is busy; try again after a short wait."
+    assert "quota" not in api_message(busy)
     assert store.application["summary"] == {"kept": True}
 
     monkeypatch.setattr("app.routers.ai.complete_json", raise_category("no credit or quota"))
     quota = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
     assert quota.status_code == 503
-    assert quota.json()["detail"] == (
+    assert api_message(quota) == (
         "AI assistance is temporarily unavailable due to the provider's quota. Standard checks still work."
     )
     assert store.application["summary"] == {"kept": True}
@@ -474,7 +475,7 @@ def test_explain_distinguishes_rate_limit_quota_and_daily_limit(monkeypatch: pyt
     calls_before = store.calls
     daily = client.post(f"/applications/{APP_ID}/explain", headers=_auth(), json={"language": "en"})
     assert daily.status_code == 429
-    assert daily.json()["detail"] == "The daily AI limit has been reached. Please try again tomorrow."
+    assert api_message(daily) == "The daily AI limit has been reached. Please try again tomorrow."
     assert store.calls == calls_before
 
 

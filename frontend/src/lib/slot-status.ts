@@ -40,3 +40,20 @@ export function slotStatus(
   }
   return "Passed";
 }
+
+const STALL_MS = 2 * 60 * 1000;
+
+export function isStalledProcessing(status: string, updatedAt: string, now = Date.now()): boolean {
+  if (status !== "processing") {
+    return false;
+  }
+  const stamp = Date.parse(updatedAt);
+  if (Number.isNaN(stamp)) {
+    return true;
+  }
+  return now - stamp >= STALL_MS;
+}
+
+export function shouldAutoResume(status: string, updatedAt: string, now = Date.now()): boolean {
+  return status === "uploaded" || isStalledProcessing(status, updatedAt, now);
+}

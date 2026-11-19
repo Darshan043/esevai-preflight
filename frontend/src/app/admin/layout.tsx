@@ -1,13 +1,11 @@
 import { Suspense } from "react";
 
-import { AdminGate } from "@/app/admin/admin-gate";
+export const instant = false;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="page-wrap max-w-6xl">
-      <Suspense fallback={<p className="text-muted">Loading the admin page...</p>}>
-        <AdminGate>{children}</AdminGate>
-      </Suspense>
+      <Suspense fallback={<p className="text-muted">Loading the admin page...</p>}>{children}</Suspense>
     </main>
   );
 }

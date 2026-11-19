@@ -47,6 +47,7 @@ export async function getUserAndProfile(): Promise<{
   userId: string;
   email: string | null;
   profile: Profile | null;
+  profileError: boolean;
 } | null> {
   // Session checks read the clock inside Supabase. Wait until request time first.
   await connection();
@@ -58,7 +59,7 @@ export async function getUserAndProfile(): Promise<{
     return null;
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("full_name, role, preferred_language")
     .eq("id", user.id)
@@ -74,5 +75,6 @@ export async function getUserAndProfile(): Promise<{
           preferred_language: profile.preferred_language,
         }
       : null,
+    profileError: Boolean(error),
   };
 }

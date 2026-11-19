@@ -186,6 +186,9 @@ def test_admin_endpoints_require_admin(monkeypatch: object) -> None:
         assert client.request(method, path).status_code == 401
         _install(monkeypatch, store, role="citizen")
         assert client.request(method, path, headers=_auth("citizen"), json={}).status_code == 403
+    _install(monkeypatch, store, role="admin")
+    assert client.get("/admin/stats", headers=_auth()).status_code == 200
+    assert client.get("/admin/services", headers=_auth()).status_code == 200
 
 
 def test_valid_service_and_document_pass() -> None:

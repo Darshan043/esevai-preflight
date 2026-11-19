@@ -1,4 +1,6 @@
 // Next.js 16 calls this file proxy.ts. Older versions called it middleware.ts.
+// Session refresh, login redirects, and the /admin role check live in updateSession.
+// The admin role is read from the profiles table, never from the browser.
 
 import { type NextRequest } from "next/server";
 

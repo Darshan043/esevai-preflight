@@ -4,6 +4,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { adminProxyDecision, isAdminPath } from "@/lib/admin-access";
+
 function publicConfig(): { url: string; anonKey: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -66,6 +68,27 @@ export async function updateSession(request: NextRequest) {
     redirectUrl.pathname = "/dashboard";
     redirectUrl.search = "";
     return copyCookies(supabaseResponse, NextResponse.redirect(redirectUrl));
+  }
+
+  // /admin is for admins only. The role comes from profiles, never from the client.
+  if (user && isAdminPath(path)) {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    const decision = adminProxyDecision({
+      signedIn: true,
+      role: typeof profile?.role === "string" ? profile.role : null,
+      profileFound: profile != null && typeof profile.role === "string",
+      profileLookupFailed: Boolean(error),
+    });
+    if (decision === "dashboard") {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/dashboard";
+      redirectUrl.search = "";
+      return copyCookies(supabaseResponse, NextResponse.redirect(redirectUrl));
+    }
   }
 
   // Cache Components starts a 200 response before a page can call notFound().
